@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --font-family: 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg-main: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --primary-teal: #0F766E;
+  --secondary-teal: #14B8A6;
+  --accent-cyan: #06B6D4;
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --border-color: #E2E8F0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  direction: rtl;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0F766E;
+}
+
+/* Enterprise Card Styling */
+.glass-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.glass-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #0F766E 0%, #14B8A6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Mobile Responsiveness Utilities */
+@media (max-width: 768px) {
+  .responsive-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── Console layout utilities ──────────────────────────────────────────────
+   The split layout is main content beside a narrower rail on wide screens and
+   a single stacked column below 1100px, so no page ever scrolls sideways. */
+.split-grid { grid-template-columns: 1fr; }
+@media (min-width: 1100px) {
+  .split-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+
+/* Tables inside cards scroll within their own box, never the page. */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Nothing is allowed to push the page wider than the viewport. */
+#root, main { max-width: 100%; }
+img, svg, table { max-width: 100%; }
+
+/* ── KPI grid ──────────────────────────────────────────────────────────────
+   Column counts are chosen so the row divides evenly for the number of tiles
+   on the page, instead of `auto-fit` leaving a half-empty final row. */
+.kpi-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+@media (min-width: 700px) {
+  .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi-grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1180px) {
+  .kpi-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi-grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .kpi-grid.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .kpi-grid.cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* ── Filter toolbars ───────────────────────────────────────────────────────
+   Pages set fixed pixel widths on their search fields, which overflow the card
+   they sit in once the viewport is narrower than that width. Cap every control
+   to its container and let it grow instead. */
+.glass-card .MuiFormControl-root,
+.glass-card .MuiTextField-root {
+  max-width: 100%;
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .glass-card .MuiFormControl-root,
+  .glass-card .MuiTextField-root {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+  /* Tabs inside a filter bar scroll rather than squeeze. */
+  .glass-card .MuiTabs-root { max-width: 100%; }
+}
+
+/* Long page titles wrap instead of forcing the header wider. */
+main h1 { overflow-wrap: anywhere; }
+
+/* ── Mobile experience ─────────────────────────────────────────────────────
+   Room to breathe at the end of a scroll (so the last card is not flush
+   against the edge, and clears any floating action button). */
+main { padding-bottom: 24px; }
+@media (max-width: 900px) {
+  main { padding: 16px 16px 96px !important; }
+  /* Page header actions stack full-width rather than crowding the title. */
+  main > header { flex-direction: column; align-items: stretch; }
+  main > header > div:last-child { width: 100%; }
+  main > header > div:last-child > * { flex: 1 1 auto; }
+}
+
+/* Buttons inside a toolbar keep their intrinsic width on mobile — the
+   full-width rule above is for page-level actions, not inline filters. */
+@media (max-width: 600px) {
+  .glass-card .MuiButton-root { width: auto; }
+}
+
+/* Floating action button clears the safe area on iOS. */
+.fab-root {
+  position: fixed;
+  inset-inline-start: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 1200;
+}
+
+/* Shown only on phones — desktop keeps the action in the page header. */
+.mobile-only { display: none !important; }
+@media (max-width: 900px) { .mobile-only { display: inline-flex !important; } }

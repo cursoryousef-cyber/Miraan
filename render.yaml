@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: miran-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    # Applies committed migrations only — no schema drift from `db push`, and no
+    # automatic seed. `src/seed/seed.ts` upserts a full legacy demo dataset by
+    # fixed codes (HEALTH-HOLDING, NB-CLUSTER, etc.); running it on every boot
+    # would silently repopulate that demo data into production. The script is
+    # kept for deliberate, manual use — it is never invoked by a normal boot.
+    # dist/src/main.js, not dist/main.js — nest build preserves the src/ layout
+    # under dist/ since tsconfig has no explicit rootDir.
+    startCommand: npx prisma migrate deploy && node dist/src/main.js
+    # main.ts's setGlobalPrefix only excludes '/' and 'api/docs' — health is NOT
+    # excluded, so it carries both the API_PREFIX ('api') and the URI version
+    # ('v1') like every other route. The served path is therefore /api/v1/health.
+    # Verified against the live service: /api/v1/health -> 200, /v1/health -> 404.
+    # The previous value here (/v1/health) 404s, which means Render's health
+    # check has been failing and new deploys were likely never being promoted —
+    # this is the probable reason the training-events migrations, committed and
+    # present in this repo, were never applied to production.
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # MUST be `api`, not `api/v1`. URI versioning appends the `v1` segment
+      # itself, so API_PREFIX=api yields the /api/v1/* routes that the web and iOS
+      # clients call. Setting it to `api/v1` shifts every route to /api/v1/v1/*
+      # and breaks all clients — confirmed locally against the production build.
+      - key: API_PREFIX
+        value: api
+      # Off in production. /api/docs served the full API surface — every route,
+      # schema, and request example — to anonymous callers. Set to "true" only
+      # for a deliberate, temporary investigation.
+      - key: SWAGGER_ENABLED
+        value: false
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: DATABASE_URL
+        sync: false
+      # Base URL of the deployed web frontend. Used to build account-activation
+      # and password-reset links (user-accounts.service.ts,
+      # organization-provisioning.service.ts). Without it both fall back to
+      # http://localhost:5173 and every link mailed from production is unusable.
+      # No default is set here on purpose — the real domain must be supplied in
+      # the Render dashboard before pilot users are onboarded.
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CARD_HMAC_SECRET
+        generateValue: true

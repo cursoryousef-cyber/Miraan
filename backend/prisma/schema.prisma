@@ -1,0 +1,2125 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// أنواع الجهات — قابلة للتوسع بدون تعديل كود
+model OrganizationType {
+  id                String         @id @default(uuid()) @db.Uuid
+  code              String         @unique @db.VarChar(50)
+  nameAr            String         @map("name_ar") @db.VarChar(200)
+  nameEn            String         @map("name_en") @db.VarChar(200)
+  icon              String?        @db.VarChar(50)
+  sortOrder         Int            @default(0) @map("sort_order")
+  canHaveChildren   Boolean        @default(true) @map("can_have_children")
+  allowedChildTypes String[]       @map("allowed_child_types")
+  autoCreateRole    String?        @map("auto_create_role") @db.VarChar(100)
+  isActive          Boolean        @default(true) @map("is_active")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organizations     Organization[]
+
+  @@map("organization_types")
+}
+
+/// الجهات — شجرة تنظيمية ديناميكية بالكامل (لا جهة ثابتة في الكود)
+/// Health Holding Company, Cluster, Hospital, University — كلها سجلات عادية
+model Organization {
+  id                                  String                    @id @default(uuid()) @db.Uuid
+  organizationTypeId                  String                    @map("organization_type_id") @db.Uuid
+  parentId                            String?                   @map("parent_id") @db.Uuid
+  code                                String                    @unique @db.VarChar(50)
+  nameAr                              String                    @map("name_ar") @db.VarChar(300)
+  nameEn                              String                    @map("name_en") @db.VarChar(300)
+  status                              String                    @default("draft") @db.VarChar(20)
+  cityAr                              String?                   @map("city_ar") @db.VarChar(100)
+  cityEn                              String?                   @map("city_en") @db.VarChar(100)
+  regionAr                            String?                   @map("region_ar") @db.VarChar(100)
+  regionEn                            String?                   @map("region_en") @db.VarChar(100)
+  logoUrl                             String?                   @map("logo_url") @db.VarChar(500)
+  contactEmail                        String?                   @map("contact_email") @db.VarChar(200)
+  contactPhone                        String?                   @map("contact_phone") @db.VarChar(20)
+  website                             String?                   @db.VarChar(300)
+  address                             String?
+  settings                            Json                      @default("{}")
+  trainingYear                        String?                   @map("training_year") @db.VarChar(20)
+  defaultLanguage                     String                    @default("ar") @map("default_language") @db.VarChar(5)
+  createdById                         String?                   @map("created_by") @db.Uuid
+  updatedById                         String?                   @map("updated_by") @db.Uuid
+  deletedById                         String?                   @map("deleted_by") @db.Uuid
+  createdAt                           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                           DateTime?                 @map("deleted_at") @db.Timestamptz(6)
+  /// @deprecated لم يعد يُقرأ في أي حساب للطاقة الاستيعابية. مصدر الحقيقة الوحيد
+  /// لسعة المستشفى التدريبية هو مجموع سعات أقسامه المفعّلة
+  /// (SUM(departments.capacity) WHERE is_active). العمود باقٍ للتوافق التاريخي
+  /// فقط — كان رقماً ثانياً يُحرَّر باستقلال عن الأقسام فتتناقض الشاشات.
+  capacity                            Int                       @default(0)
+  geoLat                              Decimal?                  @map("geo_lat") @db.Decimal(10, 7)
+  geoLng                              Decimal?                  @map("geo_lng") @db.Decimal(10, 7)
+  academicIntakes                     AcademicIntake[]
+  attendanceRecords                   Attendance[]
+  auditLogs                           AuditLog[]
+  capacityAllocations                 CapacityAllocation[]
+  caseLogs                            ClinicalCaseLog[]
+  clinicalPrivileges                  ClinicalPrivilege[]
+  dashboardSnapshots                  DashboardSnapshot[]
+  declarationAcceptances              DeclarationAcceptance[]
+  declarations                        Declaration[]
+  departments                         Department[]
+  documents                           Document[]
+  evaluationForms                     EvaluationForm[]
+  evaluations                         Evaluation[]
+  featureFlags                        FeatureFlag[]
+  generatedReports                    GeneratedReport[]
+  improvementPlans                    ImprovementPlan[]
+  incidents                           Incident[]
+  targetIncidents                     Incident[]                @relation("IncidentTargetOrg")
+  integrationConfigs                  IntegrationConfig[]
+  notifications                       Notification[]
+  objectives                          Objective[]
+  allocationsAsCluster                TraineeAllocation[]       @relation("AllocationCluster")
+  allocationsAsHospital               TraineeAllocation[]       @relation("AllocationHospital")
+  sponsoredIntakes                    AcademicIntake[]          @relation("IntakeUniversity")
+  affiliationsAsSource                OrganizationAffiliation[] @relation("AffiliationSource")
+  affiliationsAsTarget                OrganizationAffiliation[] @relation("AffiliationTarget")
+  orgAssignments                      OrganizationAssignment[]
+  descendants                         OrganizationHierarchy[]   @relation("HierarchyAncestor")
+  ancestors                           OrganizationHierarchy[]   @relation("HierarchyDescendant")
+  license                             OrganizationLicense?
+  organizationType                    OrganizationType          @relation(fields: [organizationTypeId], references: [id])
+  parent                              Organization?             @relation("OrgHierarchy", fields: [parentId], references: [id])
+  children                            Organization[]            @relation("OrgHierarchy")
+  outboxEvents                        OutboxEvent[]
+  policies                            Policy[]
+  programs                            Program[]
+  reportDefinitions                   ReportDefinition[]
+  rotations                           Rotation[]
+  orgSettings                         Setting[]                 @relation("OrgSettings")
+  shifts                              Shift[]
+  storedFiles                         StoredFile[]
+  tasks                               Task[]
+  traineeProfiles                     TraineeProfile[]
+  sponsoredTrainees                   TraineeProfile[]          @relation("SponsorOrg")
+  trainerCalls                        TrainerCall[]
+  trainingEvents                      TrainingEvent[]
+  trainerLeaves                       TrainerLeave[]
+  trainerProfiles                     TrainerProfile[]
+  trainerReassignments                TrainerReassignment[]
+  trainingPlans                       TrainingPlan[]
+  trainingRequestTraineesAsHospital   TrainingRequestTrainee[]  @relation("TRTHospital")
+  trainingRequestTraineesAsCollege    TrainingRequestTrainee[]  @relation("TRTCollege")
+  trainingRequestTraineesAsUniversity TrainingRequestTrainee[]  @relation("TRTUniversity")
+  trainingReqsSent                    TrainingRequest[]         @relation("TrainingReqSourceOrg")
+  trainingReqsReceived                TrainingRequest[]         @relation("TrainingReqTargetOrg")
+  userOrganizations                   UserOrganization[]
+  userPermissions                     UserPermission[]
+  userRoles                           UserRole[]
+  webhookSubscriptions                WebhookSubscription[]
+  workflowDefinitions                 WorkflowDefinition[]
+  workflowInstances                   WorkflowInstance[]
+  trainingSchedules                   TrainingSchedule[]
+  scheduleTemplates                   ScheduleTemplate[]
+  scheduleSessions                    ScheduleSession[]
+
+  @@index([parentId])
+  @@index([organizationTypeId])
+  @@index([status])
+  @@map("organizations")
+}
+
+/// Closure Table — O(1) ancestor/descendant queries
+model OrganizationHierarchy {
+  ancestorId   String       @map("ancestor_id") @db.Uuid
+  descendantId String       @map("descendant_id") @db.Uuid
+  depth        Int          @default(0)
+  ancestor     Organization @relation("HierarchyAncestor", fields: [ancestorId], references: [id])
+  descendant   Organization @relation("HierarchyDescendant", fields: [descendantId], references: [id])
+
+  @@id([ancestorId, descendantId])
+  @@map("organization_hierarchy")
+}
+
+/// اتفاقيات بين الجهات — جامعة ↔ مستشفى، تجمع ↔ مركز تدريب
+model OrganizationAffiliation {
+  id              String       @id @default(uuid()) @db.Uuid
+  sourceOrgId     String       @map("source_org_id") @db.Uuid
+  targetOrgId     String       @map("target_org_id") @db.Uuid
+  affiliationType String       @map("affiliation_type") @db.VarChar(50)
+  nameAr          String?      @map("name_ar") @db.VarChar(300)
+  nameEn          String?      @map("name_en") @db.VarChar(300)
+  agreementRef    String?      @map("agreement_ref") @db.VarChar(100)
+  startDate       DateTime?    @map("start_date") @db.Date
+  endDate         DateTime?    @map("end_date") @db.Date
+  status          String       @default("active") @db.VarChar(20)
+  notes           String?
+  metadata        Json         @default("{}")
+  createdById     String?      @map("created_by") @db.Uuid
+  updatedById     String?      @map("updated_by") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sourceOrg       Organization @relation("AffiliationSource", fields: [sourceOrgId], references: [id])
+  targetOrg       Organization @relation("AffiliationTarget", fields: [targetOrgId], references: [id])
+
+  @@unique([sourceOrgId, targetOrgId, affiliationType])
+  @@map("organization_affiliations")
+}
+
+/// Feature Flags — تشغيل/إيقاف ميزات لكل جهة
+model FeatureFlag {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  featureCode    String       @map("feature_code") @db.VarChar(100)
+  isEnabled      Boolean      @default(false) @map("is_enabled")
+  configuration  Json         @default("{}")
+  enabledAt      DateTime?    @map("enabled_at") @db.Timestamptz(6)
+  disabledAt     DateTime?    @map("disabled_at") @db.Timestamptz(6)
+  updatedById    String?      @map("updated_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, featureCode])
+  @@map("feature_flags")
+}
+
+/// رخص الجهات — نموذج اشتراك / ترخيص
+model OrganizationLicense {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @unique @map("organization_id") @db.Uuid
+  plan           String       @default("basic") @db.VarChar(50)
+  maxUsers       Int          @default(50) @map("max_users")
+  maxTrainees    Int          @default(200) @map("max_trainees")
+  maxStorageGb   Int          @default(10) @map("max_storage_gb")
+  features       String[]     @default([])
+  startDate      DateTime     @map("start_date") @db.Date
+  endDate        DateTime     @map("end_date") @db.Date
+  status         String       @default("active") @db.VarChar(20)
+  autoRenew      Boolean      @default(false) @map("auto_renew")
+  notes          String?
+  createdById    String?      @map("created_by") @db.Uuid
+  updatedById    String?      @map("updated_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("organization_licenses")
+}
+
+/// الشخص — الهوية الفعلية (مستقلة عن حسابات الدخول)
+model Person {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  nationalId            String?                  @unique @map("national_id") @db.VarChar(20)
+  nameAr                String                   @map("name_ar") @db.VarChar(200)
+  nameEn                String?                  @map("name_en") @db.VarChar(200)
+  dateOfBirth           DateTime?                @map("date_of_birth") @db.Date
+  gender                String?                  @db.VarChar(10)
+  nationality           String?                  @db.VarChar(50)
+  phone                 String?                  @db.VarChar(20)
+  email                 String?                  @db.VarChar(200)
+  avatarUrl             String?                  @map("avatar_url") @db.VarChar(500)
+  bloodType             String?                  @map("blood_type") @db.VarChar(5)
+  emergencyContactName  String?                  @map("emergency_contact_name") @db.VarChar(200)
+  emergencyContactPhone String?                  @map("emergency_contact_phone") @db.VarChar(20)
+  isActive              Boolean                  @default(true) @map("is_active")
+  createdById           String?                  @map("created_by") @db.Uuid
+  updatedById           String?                  @map("updated_by") @db.Uuid
+  deletedById           String?                  @map("deleted_by") @db.Uuid
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt             DateTime?                @map("deleted_at") @db.Timestamptz(6)
+  traineeProfile        TraineeProfile?
+  trainerProfile        TrainerProfile?
+  trainingRequestRows   TrainingRequestTrainee[]
+  userAccounts          UserAccount[]
+
+  @@index([nationalId])
+  @@map("persons")
+}
+
+/// حساب الدخول — شخص واحد يمكنه امتلاك عدة حسابات
+model UserAccount {
+  id                     String                   @id @default(uuid()) @db.Uuid
+  personId               String                   @map("person_id") @db.Uuid
+  username               String?                  @unique @db.VarChar(100)
+  email                  String                   @unique @db.VarChar(200)
+  passwordHash           String                   @map("password_hash") @db.VarChar(300)
+  isEmailVerified        Boolean                  @default(false) @map("is_email_verified")
+  isPhoneVerified        Boolean                  @default(false) @map("is_phone_verified")
+  isActive               Boolean                  @default(true) @map("is_active")
+  mfaEnabled             Boolean                  @default(false) @map("mfa_enabled")
+  mfaSecret              String?                  @map("mfa_secret") @db.VarChar(200)
+  lastLoginAt            DateTime?                @map("last_login_at") @db.Timestamptz(6)
+  loginAttempts          Int                      @default(0) @map("login_attempts")
+  lockedUntil            DateTime?                @map("locked_until") @db.Timestamptz(6)
+  refreshTokenHash       String?                  @map("refresh_token_hash") @db.VarChar(300)
+  activationToken        String?                  @map("activation_token") @db.VarChar(300)
+  activationTokenExpiresAt DateTime?              @map("activation_token_expires_at") @db.Timestamptz(6)
+  activatedAt            DateTime?                @map("activated_at") @db.Timestamptz(6)
+  createdById            String?                  @map("created_by") @db.Uuid
+  updatedById            String?                  @map("updated_by") @db.Uuid
+  deletedById            String?                  @map("deleted_by") @db.Uuid
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?                @map("deleted_at") @db.Timestamptz(6)
+  intakeCoordinated      AcademicIntake[]         @relation("IntakeCoordinator")
+  attendanceApproved     Attendance[]             @relation("AttendanceApprover")
+  auditLogs              AuditLog[]
+  declarationAcceptances DeclarationAcceptance[]
+  documentsReviewed      Document[]               @relation("DocumentReviewer")
+  documentsOwned         Document[]               @relation("DocumentOwner")
+  evaluationsReceived    Evaluation[]             @relation("Evaluatee")
+  evaluationsGiven       Evaluation[]             @relation("Evaluator")
+  reportsGenerated       GeneratedReport[]        @relation("ReportGenerator")
+  graduationApprovals    GraduationApproval[]     @relation("GraduationApprover")
+  improvementCreated     ImprovementPlan[]        @relation("PlanCreator")
+  improvementSupervised  ImprovementPlan[]        @relation("PlanSupervisor")
+  incidentsReported      Incident[]               @relation("IncidentReporter")
+  incidentsAssigned      Incident[]               @relation("IncidentAssignee")
+  incidentsResolved      Incident[]               @relation("IncidentResolver")
+  incidentComments       IncidentComment[]
+  logbookSignoffs        LogbookSignoff[]
+  notifications          Notification[]
+  objectivesVerified     ObjectiveProgress[]      @relation("ObjectiveVerifier")
+  orgAssignments         OrganizationAssignment[]
+  trainingEventsCreated  TrainingEvent[]          @relation("TrainingEventCreator")
+  trainingEventsReceived TrainingEventRecipient[] @relation("TrainingEventRecipientAccount")
+  trainingEventsConfirmed TrainingEventRecipient[] @relation("TrainingEventConfirmer")
+  supervisedRotations    Rotation[]               @relation("RotationSupervisor")
+  settingsUpdated        Setting[]
+  filesUploaded          StoredFile[]
+  tasksCreated           Task[]                   @relation("TaskCreator")
+  tasksAssigned          Task[]                   @relation("TaskAssignee")
+  traineeCardIssued      TraineeProfile[]         @relation("CardIssuer")
+  traineePhotoApproved   TraineeProfile[]         @relation("PhotoApprover")
+  trainingPlansCreated   TrainingPlan[]
+  createdSchedules       TrainingSchedule[]     @relation("ScheduleCreator")
+  publishedRevisions     ScheduleRevision[]
+  createdBy              UserAccount?             @relation("AccountCreator", fields: [createdById], references: [id])
+  createdAccounts        UserAccount[]            @relation("AccountCreator")
+  approvedIntakes        AcademicIntake[]         @relation("IntakeApprover")
+  performedAllocations   TraineeAllocation[]      @relation("AllocationPerformer")
+  person                 Person                   @relation(fields: [personId], references: [id])
+  organizations          UserOrganization[]
+  userPermissions        UserPermission[]
+  userRoles              UserRole[]
+  workflowActions        WorkflowAction[]
+
+  @@index([personId])
+  @@map("user_accounts")
+}
+
+/// عضوية المستخدم في الجهات — multi-org (legacy compatibility layer — read-only after migration)
+model UserOrganization {
+  id             String       @id @default(uuid()) @db.Uuid
+  userAccountId  String       @map("user_account_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  isPrimary      Boolean      @default(false) @map("is_primary")
+  isActive       Boolean      @default(true) @map("is_active")
+  joinedAt       DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+  leftAt         DateTime?    @map("left_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userAccount    UserAccount  @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([userAccountId, organizationId])
+  @@index([organizationId])
+  @@map("user_organizations")
+}
+
+/// تعيينات المستخدمين في الجهات — نموذج التعيين المستقبلي
+/// يدعم التعيينات المتعددة، السجل التاريخي الكامل، الإعارة المؤقتة، تعدد الجهات
+model OrganizationAssignment {
+  id             String       @id @default(uuid()) @db.Uuid
+  userAccountId  String       @map("user_account_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  departmentId   String?      @map("department_id") @db.Uuid
+  roleId         String?      @map("role_id") @db.Uuid
+  /// permanent | temporary | acting | rotation
+  assignmentType String       @default("permanent") @map("assignment_type") @db.VarChar(20)
+  isPrimary      Boolean      @default(false) @map("is_primary")
+  isActive       Boolean      @default(true) @map("is_active")
+  startDate      DateTime     @default(now()) @map("start_date") @db.Timestamptz(6)
+  endDate        DateTime?    @map("end_date") @db.Timestamptz(6)
+  reason         String?
+  notes          String?
+  /// source of truth for backfilled rows: user_organization | trainer_profile | trainee_profile | manual
+  sourceType     String       @default("manual") @map("source_type") @db.VarChar(30)
+  sourceId       String?      @map("source_id") @db.Uuid
+  createdById    String?      @map("created_by") @db.Uuid
+  updatedById    String?      @map("updated_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  department     Department?  @relation(fields: [departmentId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  role           Role?        @relation(fields: [roleId], references: [id])
+  userAccount    UserAccount  @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@index([userAccountId, isActive])
+  @@index([organizationId, isActive])
+  @@index([userAccountId, organizationId])
+  @@map("organization_assignments")
+}
+
+model Role {
+  id              String                   @id @default(uuid()) @db.Uuid
+  code            String                   @unique @db.VarChar(100)
+  nameAr          String                   @map("name_ar") @db.VarChar(200)
+  nameEn          String                   @map("name_en") @db.VarChar(200)
+  descriptionAr   String?                  @map("description_ar")
+  descriptionEn   String?                  @map("description_en")
+  hierarchyLevel  Int                      @default(0) @map("hierarchy_level")
+  isSystem        Boolean                  @default(false) @map("is_system")
+  isActive        Boolean                  @default(true) @map("is_active")
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  orgAssignments  OrganizationAssignment[]
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  code            String           @unique @db.VarChar(100)
+  nameAr          String           @map("name_ar") @db.VarChar(200)
+  nameEn          String           @map("name_en") @db.VarChar(200)
+  module          String           @db.VarChar(100)
+  descriptionAr   String?          @map("description_ar")
+  descriptionEn   String?          @map("description_en")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+/// Multi-org + multi-role: user can have different roles in different organizations
+model UserRole {
+  userAccountId  String       @map("user_account_id") @db.Uuid
+  roleId         String       @map("role_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  assignedAt     DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  assignedById   String?      @map("assigned_by") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  role           Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  userAccount    UserAccount  @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@id([userAccountId, roleId, organizationId])
+  @@map("user_roles")
+}
+
+model UserPermission {
+  userAccountId  String       @map("user_account_id") @db.Uuid
+  permissionId   String       @map("permission_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  granted        Boolean      @default(true)
+  grantedAt      DateTime     @default(now()) @map("granted_at") @db.Timestamptz(6)
+  grantedById    String?      @map("granted_by") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  permission     Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  userAccount    UserAccount  @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@id([userAccountId, permissionId, organizationId])
+  @@map("user_permissions")
+}
+
+/// Policy Engine (ABAC) — conditions evaluated at runtime
+model Policy {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  code           String        @unique @db.VarChar(100)
+  nameAr         String        @map("name_ar") @db.VarChar(200)
+  nameEn         String        @map("name_en") @db.VarChar(200)
+  description    String?
+  resource       String        @db.VarChar(100)
+  action         String        @db.VarChar(50)
+  effect         String        @default("allow") @db.VarChar(10)
+  conditions     Json          @default("{}")
+  priority       Int           @default(0)
+  isActive       Boolean       @default(true) @map("is_active")
+  createdById    String?       @map("created_by") @db.Uuid
+  updatedById    String?       @map("updated_by") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([resource, action])
+  @@map("policies")
+}
+
+model WorkflowDefinition {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String?            @map("organization_id") @db.Uuid
+  code           String             @unique @db.VarChar(100)
+  nameAr         String             @map("name_ar") @db.VarChar(200)
+  nameEn         String             @map("name_en") @db.VarChar(200)
+  description    String?
+  entityType     String             @map("entity_type") @db.VarChar(100)
+  version        Int                @default(1)
+  steps          Json               @default("[]")
+  transitions    Json               @default("[]")
+  isActive       Boolean            @default(true) @map("is_active")
+  createdById    String?            @map("created_by") @db.Uuid
+  updatedById    String?            @map("updated_by") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization?      @relation(fields: [organizationId], references: [id])
+  instances      WorkflowInstance[]
+
+  @@index([entityType])
+  @@map("workflow_definitions")
+}
+
+model WorkflowInstance {
+  id                   String             @id @default(uuid()) @db.Uuid
+  organizationId       String             @map("organization_id") @db.Uuid
+  workflowDefinitionId String             @map("workflow_definition_id") @db.Uuid
+  entityType           String             @map("entity_type") @db.VarChar(100)
+  entityId             String             @map("entity_id") @db.Uuid
+  currentStep          String             @map("current_step") @db.VarChar(100)
+  status               String             @default("in_progress") @db.VarChar(20)
+  metadata             Json               @default("{}")
+  startedAt            DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt          DateTime?          @map("completed_at") @db.Timestamptz(6)
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  actions              WorkflowAction[]
+  organization         Organization       @relation(fields: [organizationId], references: [id])
+  workflowDefinition   WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([organizationId, status])
+  @@map("workflow_instances")
+}
+
+model WorkflowAction {
+  id                 String           @id @default(uuid()) @db.Uuid
+  workflowInstanceId String           @map("workflow_instance_id") @db.Uuid
+  fromStep           String           @map("from_step") @db.VarChar(100)
+  toStep             String           @map("to_step") @db.VarChar(100)
+  action             String           @db.VarChar(50)
+  performedById      String?          @map("performed_by") @db.Uuid
+  comment            String?
+  metadata           Json             @default("{}")
+  performedAt        DateTime         @default(now()) @map("performed_at") @db.Timestamptz(6)
+  performedBy        UserAccount?     @relation(fields: [performedById], references: [id])
+  workflowInstance   WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+
+  @@index([workflowInstanceId])
+  @@map("workflow_actions")
+}
+
+/// Transactional Outbox — guarantees events are published exactly once
+model OutboxEvent {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  eventType      String        @map("event_type") @db.VarChar(100)
+  aggregateType  String        @map("aggregate_type") @db.VarChar(100)
+  aggregateId    String        @map("aggregate_id") @db.Uuid
+  payload        Json
+  status         String        @default("pending") @db.VarChar(20)
+  retryCount     Int           @default(0) @map("retry_count")
+  maxRetries     Int           @default(5) @map("max_retries")
+  lastError      String?       @map("last_error")
+  scheduledAt    DateTime      @default(now()) @map("scheduled_at") @db.Timestamptz(6)
+  processedAt    DateTime?     @map("processed_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([status, scheduledAt])
+  @@index([eventType])
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+model Department {
+  id                      String                    @id @default(uuid()) @db.Uuid
+  organizationId          String                    @map("organization_id") @db.Uuid
+  nameAr                  String                    @map("name_ar") @db.VarChar(200)
+  nameEn                  String?                   @map("name_en") @db.VarChar(200)
+  code                    String?                   @db.VarChar(50)
+  capacity                Int                       @default(10)
+  description             String?
+  roundLocation           String?                   @map("round_location") @db.VarChar(200)
+  roundTime               String?                   @map("round_time") @db.VarChar(50)
+  meetingRoom             String?                   @map("meeting_room") @db.VarChar(100)
+  mapUrl                  String?                   @map("map_url") @db.VarChar(500)
+  contactExtension        String?                   @map("contact_extension") @db.VarChar(20)
+  firstDayExpectations    String?                   @map("first_day_expectations")
+  settings                Json                      @default("{}")
+  isActive                Boolean                   @default(true) @map("is_active")
+  createdById             String?                   @map("created_by") @db.Uuid
+  updatedById             String?                   @map("updated_by") @db.Uuid
+  deletedById             String?                   @map("deleted_by") @db.Uuid
+  createdAt               DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt               DateTime?                 @map("deleted_at") @db.Timestamptz(6)
+  maxActiveInterns        Int?                      @map("max_active_interns")
+  maxSupervisors          Int?                      @map("max_supervisors")
+  maxTrainers             Int?                      @map("max_trainers")
+  caseLogs                ClinicalCaseLog[]
+  clinicalPrivileges      ClinicalPrivilege[]
+  commonMistakes          DepartmentCommonMistake[]
+  organization            Organization              @relation(fields: [organizationId], references: [id])
+  objectives              Objective[]
+  orgAssignments          OrganizationAssignment[]
+  rotations               Rotation[]
+  shifts                  Shift[]
+  trainerCalls            TrainerCall[]
+  trainerProfiles         TrainerProfile[]
+  trainerReassignments    TrainerReassignment[]
+  trainingRequestTrainees TrainingRequestTrainee[]
+  traineeAllocations      TraineeAllocation[]
+  trainingSchedules       TrainingSchedule[]
+  scheduleTemplates       ScheduleTemplate[]
+  scheduleSessions        ScheduleSession[]
+
+  @@index([organizationId])
+  @@map("departments")
+}
+
+/// كتالوج البرامج التدريبية — مُدار مركزياً على مستوى الوطن
+/// organizationId = NULL يعني برنامج مركزي في الكتالوج الوطني.
+/// القيمة غير الفارغة محفوظة للبرامج القديمة المرتبطة بجهة (توافقية).
+model Program {
+  id                 String            @id @default(uuid()) @db.Uuid
+  organizationId     String?           @map("organization_id") @db.Uuid
+  nameAr             String            @map("name_ar") @db.VarChar(300)
+  nameEn             String?           @map("name_en") @db.VarChar(300)
+  code               String            @unique @db.VarChar(50)
+  programType        String            @map("program_type") @db.VarChar(50)
+  durationMonths     Int               @map("duration_months")
+  description        String?
+  requirements       Json              @default("{}")
+  departmentSequence Json              @default("[]") @map("department_sequence")
+  isActive           Boolean           @default(true) @map("is_active")
+  createdById        String?           @map("created_by") @db.Uuid
+  updatedById        String?           @map("updated_by") @db.Uuid
+  deletedById        String?           @map("deleted_by") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  sortOrder          Int               @default(0) @map("sort_order")
+  academicIntakes    AcademicIntake[]
+  organization       Organization?     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  rotations          Rotation[]
+  traineeProfiles    TraineeProfile[]
+  qualifiedTrainers  TrainerProgram[]
+  trainingPlans      TrainingPlan[]
+  trainingRequests   TrainingRequest[]
+
+  @@index([organizationId])
+  @@map("programs")
+}
+
+/// قالب الخطة التدريبية — الهوية الثابتة للخطة.
+/// لا يحمل محتوى تدريبياً بنفسه؛ المحتوى يعيش في الإصدارات (TrainingPlanVersion)
+/// وهي غير قابلة للتعديل بعد الاعتماد. تعديل خطة معتمدة يُنشئ إصداراً جديداً.
+model TrainingPlan {
+  id               String                @id @default(uuid()) @db.Uuid
+  programId        String                @map("program_id") @db.Uuid
+  /// فارغ = قالب وطني مرتبط بالكتالوج المركزي. غير فارغ = خطة خاصة بجهة (إرث).
+  organizationId   String?               @map("organization_id") @db.Uuid
+  trainingYear     String?               @map("training_year") @db.VarChar(20)
+  nameAr           String                @map("name_ar") @db.VarChar(200)
+  nameEn           String?               @map("name_en") @db.VarChar(200)
+  startDate        DateTime?             @map("start_date") @db.Date
+  endDate          DateTime?             @map("end_date") @db.Date
+  status           String                @default("draft") @db.VarChar(20)
+  createdById      String?               @map("created_by") @db.Uuid
+  updatedById      String?               @map("updated_by") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// رمز القالب داخل البرنامج — مستقر عبر الإصدارات
+  code             String?               @db.VarChar(50)
+  isActive         Boolean               @default(true) @map("is_active")
+  traineeProfiles  TraineeProfile[]
+  versions         TrainingPlanVersion[]
+  createdBy        UserAccount?          @relation(fields: [createdById], references: [id])
+  organization     Organization?         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  program          Program               @relation(fields: [programId], references: [id])
+  trainingRequests TrainingRequest[]
+
+  @@unique([programId, code])
+  @@index([programId])
+  @@map("training_plans")
+}
+
+/// إصدار خطة تدريبية — غير قابل للتعديل بعد الاعتماد (immutable).
+/// المتدرب يبقى مرتبطاً بالإصدار الذي بدأ به، وتقارير الأداء التاريخية
+/// ترجع دائماً إلى الإصدار الأصلي ولا يُعاد كتابتها أبداً.
+model TrainingPlanVersion {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trainingPlanId        String                 @map("training_plan_id") @db.Uuid
+  versionNumber         Int                    @map("version_number")
+  /// وصف الإصدار كما يظهر في التقارير — مثال: «الإصدار 1 (2026)»
+  label                 String?                @db.VarChar(200)
+  /// draft = قابل للتعديل | active = معتمد وغير قابل للتعديل | archived = تاريخي
+  status                String                 @default("draft") @db.VarChar(20)
+  effectiveFrom         DateTime?              @map("effective_from") @db.Date
+  effectiveTo           DateTime?              @map("effective_to") @db.Date
+  /// مدة الخطة بالأسابيع — محسوبة من مجموع مدد الروتيشنات
+  totalWeeks            Int                    @default(0) @map("total_weeks")
+  notes                 String?
+  /// الإصدار الذي حلّ محل هذا الإصدار — يحفظ سلسلة النسب للتقارير
+  supersededByVersionId String?                @map("superseded_by_version_id") @db.Uuid
+  /// الإصدار الذي نُسخ عنه هذا الإصدار عند التعديل
+  clonedFromVersionId   String?                @map("cloned_from_version_id") @db.Uuid
+  publishedAt           DateTime?              @map("published_at") @db.Timestamptz(6)
+  publishedById         String?                @map("published_by") @db.Uuid
+  archivedAt            DateTime?              @map("archived_at") @db.Timestamptz(6)
+  createdById           String?                @map("created_by") @db.Uuid
+  updatedById           String?                @map("updated_by") @db.Uuid
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  traineeProfiles       TraineeProfile[]
+  rotations             TrainingPlanRotation[]
+  clonedFrom            TrainingPlanVersion?   @relation("PlanVersionClone", fields: [clonedFromVersionId], references: [id])
+  clones                TrainingPlanVersion[]  @relation("PlanVersionClone")
+  supersededBy          TrainingPlanVersion?   @relation("PlanVersionSupersede", fields: [supersededByVersionId], references: [id])
+  supersedes            TrainingPlanVersion[]  @relation("PlanVersionSupersede")
+  trainingPlan          TrainingPlan           @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  trainingRequests      TrainingRequest[]
+
+  @@unique([trainingPlanId, versionNumber])
+  @@index([trainingPlanId, status])
+  @@map("training_plan_versions")
+}
+
+/// روتيشن ضمن قالب الخطة — ينتمي إلى إصدار محدد ولا يُعدَّل تاريخياً أبداً.
+/// تعديل روتيشن في إصدار معتمد يُنشئ إصداراً جديداً بدل الكتابة فوق القديم.
+model TrainingPlanRotation {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trainingPlanVersionId String              @map("training_plan_version_id") @db.Uuid
+  /// ترتيب الروتيشن داخل الخطة — يحدد التسلسل الزمني عند الإنشاء
+  sequenceOrder         Int                 @map("sequence_order")
+  /// القسم كرمز وليس كمفتاح خارجي: القوالب وطنية بينما الأقسام تخص كل مستشفى،
+  /// فيُحل الرمز إلى قسم فعلي في المستشفى المخصص عند إنشاء جدول المتدرب.
+  departmentCode        String              @map("department_code") @db.VarChar(50)
+  departmentNameAr      String              @map("department_name_ar") @db.VarChar(200)
+  departmentNameEn      String?             @map("department_name_en") @db.VarChar(200)
+  specialtyCode         String?             @map("specialty_code") @db.VarChar(100)
+  durationWeeks         Int                 @map("duration_weeks")
+  isMandatory           Boolean             @default(true) @map("is_mandatory")
+  /// المتطلبات محفوظة كلقطة (snapshot) وليست مفاتيح خارجية: الإصدار غير قابل
+  /// للتعديل، فلا يجوز أن يتغير محتواه التاريخي إذا تغيّر الكتالوج لاحقاً.
+  requiredCompetencies  Json                @default("[]") @map("required_competencies")
+  /// [{ code, titleAr, minCount }] — تُحل إلى ProcedureCatalog لبذر CompetencyProgress
+  requiredProcedures    Json                @default("[]") @map("required_procedures")
+  requiredLogbookItems  Json                @default("[]") @map("required_logbook_items")
+  /// [{ formType, titleAr, timing }] — تُحل إلى EvaluationForm الخاص بالمستشفى
+  requiredEvaluations   Json                @default("[]") @map("required_evaluations")
+  objectives            Json                @default("[]")
+  notes                 String?
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  rotations             Rotation[]
+  trainingPlanVersion   TrainingPlanVersion @relation(fields: [trainingPlanVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingPlanVersionId, sequenceOrder], map: "training_plan_rotations_version_sequence_key")
+  @@index([trainingPlanVersionId])
+  @@map("training_plan_rotations")
+}
+
+/// الدفعات الأكاديمية — Academic Intake
+model AcademicIntake {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @map("organization_id") @db.Uuid
+  programId        String?           @map("program_id") @db.Uuid
+  code             String            @unique @db.VarChar(50)
+  nameAr           String            @map("name_ar") @db.VarChar(200)
+  nameEn           String?           @map("name_en") @db.VarChar(200)
+  academicYear     String            @map("academic_year") @db.VarChar(20)
+  startDate        DateTime          @map("start_date") @db.Date
+  endDate          DateTime          @map("end_date") @db.Date
+  capacity         Int               @default(0)
+  status           String            @default("planned") @db.VarChar(20)
+  coordinatorId    String?           @map("coordinator_id") @db.Uuid
+  notes            String?
+  metadata         Json              @default("{}")
+  createdById      String?           @map("created_by") @db.Uuid
+  updatedById      String?           @map("updated_by") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// الطلب المعتمد الذي وُلدت منه هذه الدفعة. الدفعة الأكاديمية ليست كياناً
+  /// مستقلاً — لا تُنشأ إلا من TrainingRequest بحالة approved، وهذا الحقل هو
+  /// إثبات المصدر. يبقى nullable للدفعات التاريخية التي سبقت هذا القيد.
+  trainingRequestId   String?        @unique @map("training_request_id") @db.Uuid
+  /// الجامعة الموفدة — منسوخة من الطلب وقت الاعتماد لتظل الدفعة قابلة للقراءة
+  /// دون الحاجة لتتبع الطلب في كل استعلام.
+  universityOrgId     String?        @map("university_org_id") @db.Uuid
+  approvedById        String?        @map("approved_by") @db.Uuid
+  approvedAt          DateTime?      @map("approved_at") @db.Timestamptz(6)
+  coordinator      UserAccount?      @relation("IntakeCoordinator", fields: [coordinatorId], references: [id])
+  approvedBy       UserAccount?      @relation("IntakeApprover", fields: [approvedById], references: [id])
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  university       Organization?     @relation("IntakeUniversity", fields: [universityOrgId], references: [id])
+  program          Program?          @relation(fields: [programId], references: [id])
+  sourceRequest    TrainingRequest?  @relation("BatchSourceRequest", fields: [trainingRequestId], references: [id])
+  traineeProfiles  TraineeProfile[]
+  trainingRequests TrainingRequest[]
+  traineeRows      TrainingRequestTrainee[]
+  allocations      TraineeAllocation[]
+
+  @@index([organizationId, academicYear])
+  @@index([trainingRequestId])
+  @@map("academic_intakes")
+}
+
+model TrainingRequest {
+  id                     String                   @id @default(uuid()) @db.Uuid
+  requestNumber          String                   @unique @map("request_number") @db.VarChar(50)
+  sourceOrgId            String                   @map("source_org_id") @db.Uuid
+  targetOrgId            String                   @map("target_org_id") @db.Uuid
+  programId              String?                  @map("program_id") @db.Uuid
+  academicIntakeId       String?                  @map("academic_intake_id") @db.Uuid
+  studentCount           Int                      @default(0) @map("student_count")
+  priority               String                   @default("normal") @db.VarChar(20)
+  status                 String                   @default("submitted") @db.VarChar(50)
+  notes                  String?
+  allocations            Json                     @default("[]")
+  createdById            String?                  @map("created_by") @db.Uuid
+  updatedById            String?                  @map("updated_by") @db.Uuid
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// قالب الخطة التدريبية الذي اختارته الجامعة عند التقديم
+  trainingPlanId         String?                  @map("training_plan_id") @db.Uuid
+  /// الإصدار المثبّت وقت التقديم — يبقى ثابتاً حتى لو صدر إصدار أحدث لاحقاً
+  trainingPlanVersionId  String?                  @map("training_plan_version_id") @db.Uuid
+  trainingStartDate      DateTime?                @map("training_start_date") @db.Date
+  trainingEndDate        DateTime?                @map("training_end_date") @db.Date
+  expectedGraduationDate DateTime?                @map("expected_graduation_date") @db.Date
+  /// رمز التخصص من LookupTable — تخصص الدفعة كاملة كما تحدده الجامعة.
+  /// يبقى التخصص على مستوى الصف هو المرجع لكل متدرب على حدة.
+  specialty              String?                  @db.VarChar(100)
+  trainees               TrainingRequestTrainee[]
+  /// الدفعة الأكاديمية الناتجة عن اعتماد هذا الطلب (1:1). تختلف عن
+  /// academicIntake أدناه، وهي العلاقة القديمة التي تربط الطلب بدفعة/فترة
+  /// قائمة مسبقاً — تلك تبقى للبيانات التاريخية.
+  producedBatch          AcademicIntake?          @relation("BatchSourceRequest")
+  traineeAllocations     TraineeAllocation[]
+  academicIntake         AcademicIntake?          @relation(fields: [academicIntakeId], references: [id])
+  program                Program?                 @relation(fields: [programId], references: [id])
+  sourceOrg              Organization             @relation("TrainingReqSourceOrg", fields: [sourceOrgId], references: [id])
+  targetOrg              Organization             @relation("TrainingReqTargetOrg", fields: [targetOrgId], references: [id])
+  trainingPlan           TrainingPlan?            @relation(fields: [trainingPlanId], references: [id])
+  trainingPlanVersion    TrainingPlanVersion?     @relation(fields: [trainingPlanVersionId], references: [id])
+
+  @@index([sourceOrgId])
+  @@index([targetOrgId])
+  @@map("training_requests")
+}
+
+/// صف المتدرب داخل دفعة طلب التدريب — سجل مرشّح قابل للمراجعة والتعديل
+/// والدمج والتقسيم والرفض قبل أن يتحول إلى حساب حقيقي (TraineeProfile).
+/// الترقية إلى حساب فعلي تتم فقط عند بلوغ الحالة cluster_approved.
+model TrainingRequestTrainee {
+  id                          String                   @id @default(uuid()) @db.Uuid
+  trainingRequestId           String                   @map("training_request_id") @db.Uuid
+  personId                    String?                  @map("person_id") @db.Uuid
+  traineeProfileId            String?                  @unique @map("trainee_profile_id") @db.Uuid
+  academicNumber              String                   @map("academic_number") @db.VarChar(50)
+  nationalId                  String                   @map("national_id") @db.VarChar(20)
+  nameAr                      String                   @map("name_ar") @db.VarChar(200)
+  nameEn                      String?                  @map("name_en") @db.VarChar(200)
+  gender                      String?                  @db.VarChar(10)
+  universityOrgId             String?                  @map("university_org_id") @db.Uuid
+  collegeOrgId                String?                  @map("college_org_id") @db.Uuid
+  internshipProgram           String?                  @map("internship_program") @db.VarChar(200)
+  specialty                   String?                  @db.VarChar(200)
+  gpa                         Decimal?                 @db.Decimal(4, 2)
+  mobile                      String?                  @db.VarChar(20)
+  email                       String?                  @db.VarChar(200)
+  trainingPeriod              String?                  @map("training_period") @db.VarChar(50)
+  startDate                   DateTime?                @map("start_date") @db.Date
+  endDate                     DateTime?                @map("end_date") @db.Date
+  priority                    String                   @default("normal") @db.VarChar(20)
+  status                      String                   @default("draft") @db.VarChar(30)
+  validationErrors            Json                     @default("[]") @map("validation_errors")
+  clusterInternalNotes        String?                  @map("cluster_internal_notes")
+  officialComments            String?                  @map("official_comments")
+  returnReason                String?                  @map("return_reason")
+  requiredDocuments           Json                     @default("[]") @map("required_documents")
+  correctionDeadline          DateTime?                @map("correction_deadline") @db.Date
+  assignedHospitalId          String?                  @map("assigned_hospital_id") @db.Uuid
+  assignedDepartmentId        String?                  @map("assigned_department_id") @db.Uuid
+  assignedTrainerProfileId    String?                  @map("assigned_trainer_profile_id") @db.Uuid
+  assignedSupervisorAccountId String?                  @map("assigned_supervisor_account_id") @db.Uuid
+  mergedIntoId                String?                  @map("merged_into_id") @db.Uuid
+  splitFromId                 String?                  @map("split_from_id") @db.Uuid
+  createdById                 String?                  @map("created_by") @db.Uuid
+  updatedById                 String?                  @map("updated_by") @db.Uuid
+  createdAt                   DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// الدفعة الأكاديمية التي ينتمي إليها هذا المتدرب. تُملأ عند اعتماد الطلب
+  /// وإنشاء الدفعة، فيصبح لكل متدرب مصدر واضح: دفعة ← طلب معتمد ← جامعة.
+  academicIntakeId            String?                  @map("academic_intake_id") @db.Uuid
+  documents                   Document[]
+  academicIntake              AcademicIntake?          @relation(fields: [academicIntakeId], references: [id])
+  allocations                 TraineeAllocation[]
+  assignedDepartment          Department?              @relation(fields: [assignedDepartmentId], references: [id])
+  assignedHospital            Organization?            @relation("TRTHospital", fields: [assignedHospitalId], references: [id])
+  assignedTrainer             TrainerProfile?          @relation(fields: [assignedTrainerProfileId], references: [id])
+  college                     Organization?            @relation("TRTCollege", fields: [collegeOrgId], references: [id])
+  mergedInto                  TrainingRequestTrainee?  @relation("TRTMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom                  TrainingRequestTrainee[] @relation("TRTMerge")
+  person                      Person?                  @relation(fields: [personId], references: [id])
+  splitFrom                   TrainingRequestTrainee?  @relation("TRTSplit", fields: [splitFromId], references: [id])
+  splitInto                   TrainingRequestTrainee[] @relation("TRTSplit")
+  traineeProfile              TraineeProfile?          @relation(fields: [traineeProfileId], references: [id])
+  trainingRequest             TrainingRequest          @relation(fields: [trainingRequestId], references: [id])
+  university                  Organization?            @relation("TRTUniversity", fields: [universityOrgId], references: [id])
+
+  @@index([trainingRequestId])
+  @@index([nationalId])
+  @@index([academicNumber])
+  @@index([status])
+  @@map("training_request_trainees")
+}
+
+model TraineeProfile {
+  id                     String                       @id @default(uuid()) @db.Uuid
+  personId               String                       @unique @map("person_id") @db.Uuid
+  organizationId         String                       @map("organization_id") @db.Uuid
+  traineeNumber          String                       @unique @map("trainee_number") @db.VarChar(50)
+  level                  String                       @db.VarChar(30)
+  specialtyAr            String?                      @map("specialty_ar") @db.VarChar(200)
+  specialtyEn            String?                      @map("specialty_en") @db.VarChar(200)
+  sponsorOrganizationId  String?                      @map("sponsor_organization_id") @db.Uuid
+  programId              String?                      @map("program_id") @db.Uuid
+  trainingPlanId         String?                      @map("training_plan_id") @db.Uuid
+  academicIntakeId       String?                      @map("academic_intake_id") @db.Uuid
+  applicationStatus      String                       @default("draft") @map("application_status") @db.VarChar(20)
+  cardStatus             String                       @default("not_issued") @map("card_status") @db.VarChar(20)
+  cardUuid               String?                      @unique @map("card_uuid") @db.VarChar(100)
+  cardSignature          String?                      @map("card_signature") @db.VarChar(300)
+  cardIssuedAt           DateTime?                    @map("card_issued_at") @db.Timestamptz(6)
+  cardIssuedById         String?                      @map("card_issued_by") @db.Uuid
+  accessStartDate        DateTime?                    @map("access_start_date") @db.Date
+  accessEndDate          DateTime?                    @map("access_end_date") @db.Date
+  photoApproved          Boolean                      @default(false) @map("photo_approved")
+  photoApprovedById      String?                      @map("photo_approved_by") @db.Uuid
+  photoApprovedAt        DateTime?                    @map("photo_approved_at") @db.Timestamptz(6)
+  graduatedAt            DateTime?                    @map("graduated_at") @db.Timestamptz(6)
+  createdById            String?                      @map("created_by") @db.Uuid
+  updatedById            String?                      @map("updated_by") @db.Uuid
+  deletedById            String?                      @map("deleted_by") @db.Uuid
+  createdAt              DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?                    @map("deleted_at") @db.Timestamptz(6)
+  isLocked               Boolean                      @default(false) @map("is_locked")
+  archivedAt             DateTime?                    @map("archived_at") @db.Timestamptz(6)
+  /// الإصدار الذي بدأ به المتدرب — يبقى ثابتاً مدى حياة المتدرب حتى بعد صدور
+  /// إصدارات أحدث، لتظل التقارير التاريخية مرتبطة بالخطة التي تدرب عليها فعلاً.
+  trainingPlanVersionId  String?                      @map("training_plan_version_id") @db.Uuid
+  expectedGraduationDate DateTime?                    @map("expected_graduation_date") @db.Date
+  attendanceRecords      Attendance[]
+  callParticipations     CallParticipant[]
+  caseLogs               ClinicalCaseLog[]
+  competencies           CompetencyProgress[]
+  documents              Document[]
+  graduationApprovals    GraduationApproval[]
+  improvementPlans       ImprovementPlan[]
+  objectiveProgress      ObjectiveProgress[]
+  rotations              Rotation[]
+  shifts                 Shift[]
+  scheduleSessions       ScheduleSession[]
+  scheduleParticipations ScheduleParticipant[]
+  academicIntake         AcademicIntake?              @relation(fields: [academicIntakeId], references: [id])
+  cardIssuedBy           UserAccount?                 @relation("CardIssuer", fields: [cardIssuedById], references: [id])
+  organization           Organization                 @relation(fields: [organizationId], references: [id])
+  person                 Person                       @relation(fields: [personId], references: [id])
+  photoApprovedBy        UserAccount?                 @relation("PhotoApprover", fields: [photoApprovedById], references: [id])
+  program                Program?                     @relation(fields: [programId], references: [id])
+  sponsorOrganization    Organization?                @relation("SponsorOrg", fields: [sponsorOrganizationId], references: [id])
+  trainingPlan           TrainingPlan?                @relation(fields: [trainingPlanId], references: [id])
+  trainingPlanVersion    TrainingPlanVersion?         @relation(fields: [trainingPlanVersionId], references: [id])
+  reassignmentRecords    TrainerReassignmentTrainee[]
+  trainingRequestRow     TrainingRequestTrainee?
+
+  @@index([organizationId])
+  @@index([applicationStatus])
+  @@map("trainee_profiles")
+}
+
+model GraduationApproval {
+  id               String         @id @default(uuid()) @db.Uuid
+  traineeProfileId String         @map("trainee_profile_id") @db.Uuid
+  approverRole     String         @map("approver_role") @db.VarChar(50)
+  approvedById     String         @map("approved_by") @db.Uuid
+  approvedAt       DateTime       @default(now()) @map("approved_at") @db.Timestamptz(6)
+  notes            String?
+  approvedBy       UserAccount    @relation("GraduationApprover", fields: [approvedById], references: [id])
+  traineeProfile   TraineeProfile @relation(fields: [traineeProfileId], references: [id])
+
+  @@unique([traineeProfileId, approverRole])
+  @@map("graduation_approvals")
+}
+
+model TrainerProfile {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  personId                String                   @unique @map("person_id") @db.Uuid
+  organizationId          String                   @map("organization_id") @db.Uuid
+  departmentId            String?                  @map("department_id") @db.Uuid
+  titleAr                 String?                  @map("title_ar") @db.VarChar(200)
+  titleEn                 String?                  @map("title_en") @db.VarChar(200)
+  extensionNumber         String?                  @map("extension_number") @db.VarChar(20)
+  maxTrainees             Int                      @default(5) @map("max_trainees")
+  specialization          String?                  @db.VarChar(200)
+  isActive                Boolean                  @default(true) @map("is_active")
+  createdById             String?                  @map("created_by") @db.Uuid
+  updatedById             String?                  @map("updated_by") @db.Uuid
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  caseLogs                ClinicalCaseLog[]
+  rotations               Rotation[]
+  trainerCalls            TrainerCall[]
+  replacementLeaves       TrainerLeave[]           @relation("ReplacementLeaves")
+  leaves                  TrainerLeave[]           @relation("TrainerLeaves")
+  department              Department?              @relation(fields: [departmentId], references: [id])
+  organization            Organization             @relation(fields: [organizationId], references: [id])
+  person                  Person                   @relation(fields: [personId], references: [id])
+  qualifiedPrograms       TrainerProgram[]
+  reassignmentsTo         TrainerReassignment[]    @relation("ReassignmentTo")
+  reassignmentsFrom       TrainerReassignment[]    @relation("ReassignmentFrom")
+  trainingRequestTrainees TrainingRequestTrainee[]
+  traineeAllocations      TraineeAllocation[]
+  scheduleSessions        ScheduleSession[]
+
+  @@map("trainer_profiles")
+}
+
+model Rotation {
+  id                     String                       @id @default(uuid()) @db.Uuid
+  organizationId         String                       @map("organization_id") @db.Uuid
+  traineeProfileId       String                       @map("trainee_profile_id") @db.Uuid
+  departmentId           String                       @map("department_id") @db.Uuid
+  trainerProfileId       String                       @map("trainer_profile_id") @db.Uuid
+  programId              String?                      @map("program_id") @db.Uuid
+  startDate              DateTime                     @map("start_date") @db.Date
+  endDate                DateTime                     @map("end_date") @db.Date
+  status                 String                       @default("scheduled") @db.VarChar(20)
+  midpointMeetingDone    Boolean                      @default(false) @map("midpoint_meeting_done")
+  midpointMeetingDate    DateTime?                    @map("midpoint_meeting_date") @db.Timestamptz(6)
+  midpointMeetingNotes   String?                      @map("midpoint_meeting_notes")
+  completionNotes        String?                      @map("completion_notes")
+  createdById            String?                      @map("created_by") @db.Uuid
+  updatedById            String?                      @map("updated_by") @db.Uuid
+  createdAt              DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  supervisorAccountId    String?                      @map("supervisor_account_id") @db.Uuid
+  /// روتيشن القالب الذي أنشأ هذا الروتيشن — فارغ للروتيشنات المُنشأة يدوياً
+  trainingPlanRotationId String?                      @map("training_plan_rotation_id") @db.Uuid
+  /// ترتيب الروتيشن ضمن جدول المتدرب — منسوخ من القالب وقت الإنشاء
+  sequenceOrder          Int?                         @map("sequence_order")
+  caseLogs               ClinicalCaseLog[]
+  evaluations            Evaluation[]
+  objectiveProgress      ObjectiveProgress[]
+  department             Department                   @relation(fields: [departmentId], references: [id])
+  organization           Organization                 @relation(fields: [organizationId], references: [id])
+  program                Program?                     @relation(fields: [programId], references: [id])
+  supervisorAccount      UserAccount?                 @relation("RotationSupervisor", fields: [supervisorAccountId], references: [id])
+  traineeProfile         TraineeProfile               @relation(fields: [traineeProfileId], references: [id])
+  trainerProfile         TrainerProfile               @relation(fields: [trainerProfileId], references: [id])
+  trainingPlanRotation   TrainingPlanRotation?        @relation(fields: [trainingPlanRotationId], references: [id])
+  reassignmentRecords    TrainerReassignmentTrainee[]
+
+  @@index([organizationId])
+  @@index([traineeProfileId, status])
+  @@index([trainerProfileId])
+  @@index([startDate, endDate])
+  @@map("rotations")
+  trainingEvents         TrainingEvent[]
+}
+
+model Shift {
+  id                String         @id @default(uuid()) @db.Uuid
+  organizationId    String         @map("organization_id") @db.Uuid
+  traineeProfileId  String         @map("trainee_profile_id") @db.Uuid
+  departmentId      String         @map("department_id") @db.Uuid
+  date              DateTime       @db.Date
+  shiftType         String         @map("shift_type") @db.VarChar(20)
+  startTime         String?        @map("start_time") @db.VarChar(10)
+  endTime           String?        @map("end_time") @db.VarChar(10)
+  createdById       String?        @map("created_by") @db.Uuid
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  attendanceRecords Attendance[]
+  department        Department     @relation(fields: [departmentId], references: [id])
+  organization      Organization   @relation(fields: [organizationId], references: [id])
+  traineeProfile    TraineeProfile @relation(fields: [traineeProfileId], references: [id])
+
+  @@map("shifts")
+}
+
+model Attendance {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @map("organization_id") @db.Uuid
+  traineeProfileId String         @map("trainee_profile_id") @db.Uuid
+  shiftId          String?        @map("shift_id") @db.Uuid
+  date             DateTime       @db.Date
+  checkIn          DateTime?      @map("check_in") @db.Timestamptz(6)
+  checkOut         DateTime?      @map("check_out") @db.Timestamptz(6)
+  method           String?        @db.VarChar(30)
+  geoLat           Decimal?       @map("geo_lat") @db.Decimal(10, 7)
+  geoLng           Decimal?       @map("geo_lng") @db.Decimal(10, 7)
+  isLate           Boolean        @default(false) @map("is_late")
+  lateMinutes      Int?           @map("late_minutes")
+  status           String         @default("present") @db.VarChar(20)
+  excuseReason     String?        @map("excuse_reason")
+  approvedById     String?        @map("approved_by") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedBy       UserAccount?   @relation("AttendanceApprover", fields: [approvedById], references: [id])
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  shift            Shift?         @relation(fields: [shiftId], references: [id])
+  traineeProfile   TraineeProfile @relation(fields: [traineeProfileId], references: [id])
+
+  @@index([organizationId])
+  @@index([traineeProfileId, date])
+  @@map("attendance")
+}
+
+model TrainerCall {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @map("organization_id") @db.Uuid
+  callType         String            @map("call_type") @db.VarChar(20)
+  customTitle      String?           @map("custom_title") @db.VarChar(200)
+  note             String?
+  location         String?           @db.VarChar(200)
+  expectedMinutes  Int?              @map("expected_minutes")
+  trainerProfileId String            @map("trainer_profile_id") @db.Uuid
+  departmentId     String            @map("department_id") @db.Uuid
+  launchedAt       DateTime          @default(now()) @map("launched_at") @db.Timestamptz(6)
+  endedAt          DateTime?         @map("ended_at") @db.Timestamptz(6)
+  status           String            @default("active") @db.VarChar(20)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  participants     CallParticipant[]
+  department       Department        @relation(fields: [departmentId], references: [id])
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  trainerProfile   TrainerProfile    @relation(fields: [trainerProfileId], references: [id])
+
+  @@index([organizationId])
+  @@map("trainer_calls")
+}
+
+model CallParticipant {
+  id               String         @id @default(uuid()) @db.Uuid
+  callId           String         @map("call_id") @db.Uuid
+  traineeProfileId String         @map("trainee_profile_id") @db.Uuid
+  state            String         @default("notified") @db.VarChar(20)
+  notifiedAt       DateTime       @map("notified_at") @db.Timestamptz(6)
+  ackAt            DateTime?      @map("ack_at") @db.Timestamptz(6)
+  selfArrivedAt    DateTime?      @map("self_arrived_at") @db.Timestamptz(6)
+  confirmedAt      DateTime?      @map("confirmed_at") @db.Timestamptz(6)
+  declineReason    String?        @map("decline_reason")
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  call             TrainerCall    @relation(fields: [callId], references: [id], onDelete: Cascade)
+  traineeProfile   TraineeProfile @relation(fields: [traineeProfileId], references: [id])
+
+  @@index([callId, traineeProfileId])
+  @@map("call_participants")
+}
+
+model EvaluationForm {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  nameAr         String       @map("name_ar") @db.VarChar(200)
+  nameEn         String?      @map("name_en") @db.VarChar(200)
+  formType       String       @map("form_type") @db.VarChar(30)
+  items          Json         @default("[]")
+  isActive       Boolean      @default(true) @map("is_active")
+  createdById    String?      @map("created_by") @db.Uuid
+  updatedById    String?      @map("updated_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  evaluations    Evaluation[]
+
+  @@map("evaluation_forms")
+}
+
+model Evaluation {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  formId         String         @map("form_id") @db.Uuid
+  rotationId     String?        @map("rotation_id") @db.Uuid
+  evaluatorId    String         @map("evaluator_id") @db.Uuid
+  evaluateeId    String         @map("evaluatee_id") @db.Uuid
+  evaluationType String         @map("evaluation_type") @db.VarChar(30)
+  scores         Json           @default("{}")
+  totalScore     Decimal?       @map("total_score") @db.Decimal(5, 2)
+  comments       String?
+  secondsSpent   Int?           @map("seconds_spent")
+  isSuspicious   Boolean        @default(false) @map("is_suspicious")
+  submittedAt    DateTime       @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  evaluatee      UserAccount    @relation("Evaluatee", fields: [evaluateeId], references: [id])
+  evaluator      UserAccount    @relation("Evaluator", fields: [evaluatorId], references: [id])
+  form           EvaluationForm @relation(fields: [formId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  rotation       Rotation?      @relation(fields: [rotationId], references: [id])
+
+  @@index([organizationId])
+  @@index([rotationId, evaluateeId, evaluationType])
+  @@map("evaluations")
+}
+
+model Document {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  organizationId           String                  @map("organization_id") @db.Uuid
+  /// Null while the document belongs to a staging row that has no account yet
+  userId                   String?                 @map("user_id") @db.Uuid
+  documentType             String                  @map("document_type") @db.VarChar(50)
+  titleAr                  String                  @map("title_ar") @db.VarChar(200)
+  titleEn                  String?                 @map("title_en") @db.VarChar(200)
+  storageKey               String                  @map("storage_key") @db.VarChar(500)
+  fileSize                 Int?                    @map("file_size")
+  mimeType                 String?                 @map("mime_type") @db.VarChar(100)
+  isMandatory              Boolean                 @default(false) @map("is_mandatory")
+  hasExpiry                Boolean                 @default(false) @map("has_expiry")
+  issueDate                DateTime?               @map("issue_date") @db.Date
+  expiryDate               DateTime?               @map("expiry_date") @db.Date
+  status                   String                  @default("pending") @db.VarChar(20)
+  reviewedById             String?                 @map("reviewed_by") @db.Uuid
+  reviewedAt               DateTime?               @map("reviewed_at") @db.Timestamptz(6)
+  reviewerNote             String?                 @map("reviewer_note")
+  version                  Int                     @default(1)
+  createdById              String?                 @map("created_by") @db.Uuid
+  updatedById              String?                 @map("updated_by") @db.Uuid
+  deletedById              String?                 @map("deleted_by") @db.Uuid
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                DateTime?               @map("deleted_at") @db.Timestamptz(6)
+  traineeProfileId         String?                 @map("trainee_profile_id") @db.Uuid
+  trainingRequestTraineeId String?                 @map("training_request_trainee_id") @db.Uuid
+  organization             Organization            @relation(fields: [organizationId], references: [id])
+  reviewedBy               UserAccount?            @relation("DocumentReviewer", fields: [reviewedById], references: [id])
+  traineeProfile           TraineeProfile?         @relation(fields: [traineeProfileId], references: [id])
+  trainingRequestTrainee   TrainingRequestTrainee? @relation(fields: [trainingRequestTraineeId], references: [id])
+  user                     UserAccount?            @relation("DocumentOwner", fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([expiryDate])
+  @@index([traineeProfileId])
+  @@index([trainingRequestTraineeId])
+  @@map("documents")
+}
+
+model StoredFile {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  uploadedById    String       @map("uploaded_by") @db.Uuid
+  fileName        String       @map("file_name") @db.VarChar(300)
+  storageKey      String       @unique @map("storage_key") @db.VarChar(500)
+  storageProvider String       @map("storage_provider") @db.VarChar(30)
+  fileSize        Int?         @map("file_size")
+  mimeType        String?      @map("mime_type") @db.VarChar(100)
+  category        String?      @db.VarChar(50)
+  isPublic        Boolean      @default(false) @map("is_public")
+  metadata        Json         @default("{}")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt       DateTime?    @map("deleted_at") @db.Timestamptz(6)
+  deletedById     String?      @map("deleted_by") @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  uploadedBy      UserAccount  @relation(fields: [uploadedById], references: [id])
+
+  @@map("stored_files")
+  trainingEvents  TrainingEvent[]
+}
+
+model IntegrationConfig {
+  id              String               @id @default(uuid()) @db.Uuid
+  organizationId  String?              @map("organization_id") @db.Uuid
+  code            String               @unique @db.VarChar(100)
+  nameAr          String               @map("name_ar") @db.VarChar(200)
+  nameEn          String               @map("name_en") @db.VarChar(200)
+  integrationType String               @map("integration_type") @db.VarChar(30)
+  baseUrl         String?              @map("base_url") @db.VarChar(500)
+  authType        String?              @map("auth_type") @db.VarChar(30)
+  credentials     Json                 @default("{}")
+  headers         Json                 @default("{}")
+  settings        Json                 @default("{}")
+  isActive        Boolean              @default(true) @map("is_active")
+  lastSyncAt      DateTime?            @map("last_sync_at") @db.Timestamptz(6)
+  createdById     String?              @map("created_by") @db.Uuid
+  updatedById     String?              @map("updated_by") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization?        @relation(fields: [organizationId], references: [id])
+  syncLogs        IntegrationSyncLog[]
+
+  @@map("integration_configs")
+}
+
+model IntegrationSyncLog {
+  id                  String            @id @default(uuid()) @db.Uuid
+  integrationConfigId String            @map("integration_config_id") @db.Uuid
+  direction           String            @db.VarChar(10)
+  entityType          String            @map("entity_type") @db.VarChar(100)
+  entityId            String?           @map("entity_id") @db.Uuid
+  status              String            @db.VarChar(20)
+  requestPayload      Json?             @map("request_payload")
+  responsePayload     Json?             @map("response_payload")
+  errorMessage        String?           @map("error_message")
+  duration            Int?
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  integrationConfig   IntegrationConfig @relation(fields: [integrationConfigId], references: [id])
+
+  @@index([integrationConfigId, createdAt])
+  @@map("integration_sync_logs")
+}
+
+model WebhookSubscription {
+  id              String               @id @default(uuid()) @db.Uuid
+  organizationId  String?              @map("organization_id") @db.Uuid
+  event           String               @db.VarChar(100)
+  targetUrl       String               @map("target_url") @db.VarChar(500)
+  secret          String?              @db.VarChar(300)
+  headers         Json                 @default("{}")
+  isActive        Boolean              @default(true) @map("is_active")
+  retryPolicy     Json                 @default("{\"backoffMs\": 1000, \"maxRetries\": 3}") @map("retry_policy")
+  lastTriggeredAt DateTime?            @map("last_triggered_at") @db.Timestamptz(6)
+  createdById     String?              @map("created_by") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deliveryLogs    WebhookDeliveryLog[]
+  organization    Organization?        @relation(fields: [organizationId], references: [id])
+
+  @@index([event])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDeliveryLog {
+  id                    String              @id @default(uuid()) @db.Uuid
+  webhookSubscriptionId String              @map("webhook_subscription_id") @db.Uuid
+  event                 String              @db.VarChar(100)
+  payload               Json
+  httpStatus            Int?                @map("http_status")
+  responseBody          String?             @map("response_body")
+  attempt               Int                 @default(1)
+  deliveredAt           DateTime            @default(now()) @map("delivered_at") @db.Timestamptz(6)
+  webhookSubscription   WebhookSubscription @relation(fields: [webhookSubscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([webhookSubscriptionId, deliveredAt])
+  @@map("webhook_delivery_logs")
+}
+
+/// تعريفات التقارير — قوالب قابلة للتخصيص
+model ReportDefinition {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String?           @map("organization_id") @db.Uuid
+  code             String            @unique @db.VarChar(100)
+  nameAr           String            @map("name_ar") @db.VarChar(200)
+  nameEn           String            @map("name_en") @db.VarChar(200)
+  description      String?
+  reportType       String            @map("report_type") @db.VarChar(50)
+  queryTemplate    Json              @map("query_template")
+  columns          Json              @default("[]")
+  filters          Json              @default("[]")
+  defaultFormat    String            @default("pdf") @map("default_format") @db.VarChar(10)
+  isSystem         Boolean           @default(false) @map("is_system")
+  isActive         Boolean           @default(true) @map("is_active")
+  createdById      String?           @map("created_by") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  generatedReports GeneratedReport[]
+  organization     Organization?     @relation(fields: [organizationId], references: [id])
+
+  @@map("report_definitions")
+}
+
+/// التقارير المُنتجة — سجل كل تقرير تم إنشاؤه
+model GeneratedReport {
+  id                 String           @id @default(uuid()) @db.Uuid
+  organizationId     String           @map("organization_id") @db.Uuid
+  reportDefinitionId String           @map("report_definition_id") @db.Uuid
+  generatedById      String           @map("generated_by") @db.Uuid
+  parameters         Json             @default("{}")
+  format             String           @db.VarChar(10)
+  storageKey         String?          @map("storage_key") @db.VarChar(500)
+  status             String           @default("pending") @db.VarChar(20)
+  rowCount           Int?             @map("row_count")
+  errorMessage       String?          @map("error_message")
+  completedAt        DateTime?        @map("completed_at") @db.Timestamptz(6)
+  expiresAt          DateTime?        @map("expires_at") @db.Timestamptz(6)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  generatedBy        UserAccount      @relation("ReportGenerator", fields: [generatedById], references: [id])
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  reportDefinition   ReportDefinition @relation(fields: [reportDefinitionId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@map("generated_reports")
+}
+
+model Notification {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  titleAr        String       @map("title_ar") @db.VarChar(300)
+  titleEn        String?      @map("title_en") @db.VarChar(300)
+  bodyAr         String?      @map("body_ar")
+  bodyEn         String?      @map("body_en")
+  type           String       @db.VarChar(50)
+  referenceType  String?      @map("reference_type") @db.VarChar(50)
+  referenceId    String?      @map("reference_id") @db.Uuid
+  isRead         Boolean      @default(false) @map("is_read")
+  readAt         DateTime?    @map("read_at") @db.Timestamptz(6)
+  sentVia        String       @default("in_app") @map("sent_via") @db.VarChar(20)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           UserAccount  @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+/// سجل التدقيق — immutable, append-only
+model AuditLog {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  actorId        String?       @map("actor_id") @db.Uuid
+  action         String        @db.VarChar(100)
+  entityType     String        @map("entity_type") @db.VarChar(100)
+  entityId       String?       @map("entity_id") @db.Uuid
+  oldValues      Json?         @map("old_values")
+  newValues      Json?         @map("new_values")
+  ipAddress      String?       @map("ip_address") @db.VarChar(45)
+  userAgent      String?       @map("user_agent")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor          UserAccount?  @relation(fields: [actorId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  key            String        @db.VarChar(200)
+  value          Json
+  descriptionAr  String?       @map("description_ar")
+  updatedById    String?       @map("updated_by") @db.Uuid
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization? @relation("OrgSettings", fields: [organizationId], references: [id])
+  updatedBy      UserAccount?  @relation(fields: [updatedById], references: [id])
+
+  @@unique([organizationId, key])
+  @@map("settings")
+}
+
+/// طاقة استيعابية دقيقة يحدّدها المستشفى نفسه — لا يجوز للتجمع تعديلها مباشرة.
+/// scopeId/specialtyCode/gender/trainingPeriod تستخدم '' (وليس NULL) كقيمة
+/// "أي/غير محدد" حتى يعمل قيد @@unique بشكل صحيح (Postgres يعامل NULL كقيم
+/// متمايزة دائماً، فلا يمنع التكرار لو كانت هذه الحقول nullable).
+model CapacityAllocation {
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @map("organization_id") @db.Uuid
+  /// 'hospital' | 'department' | 'specialty' | 'trainer' | 'supervisor' | 'program'
+  scopeType         String       @map("scope_type") @db.VarChar(20)
+  /// معرف القسم/المدرب/المشرف حسب scopeType، أو '' لسعة المستشفى الكلية
+  scopeId           String       @default("") @map("scope_id") @db.VarChar(64)
+  /// رمز التخصص من LookupTable، أو '' لعدم التقييد بتخصص
+  specialtyCode     String       @default("") @map("specialty_code") @db.VarChar(100)
+  /// 'male' | 'female' أو '' لعدم التقييد بالجنس
+  gender            String       @default("") @db.VarChar(10)
+  /// فترة التدريب (عادة academicYear الدفعة)، أو '' لعدم التقييد بفترة
+  trainingPeriod    String       @default("") @map("training_period") @db.VarChar(50)
+  totalCapacity     Int          @default(0) @map("total_capacity")
+  notes             String?
+  createdById       String?      @map("created_by") @db.Uuid
+  updatedById       String?      @map("updated_by") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// نهاية فترة التدريب
+  trainingEndDate   DateTime?    @map("training_end_date") @db.Date
+  /// بداية فترة التدريب — لربط السعة بفترات زمنية محددة
+  trainingStartDate DateTime?    @map("training_start_date") @db.Date
+  /// معرف البرنامج التدريبي من الكتالوج الوطني، أو '' لعدم التقييد ببرنامج.
+  /// يُستخدم مع scopeType='program' لسعة البرنامج في المستشفى، ومع
+  /// scopeType='department'/'trainer' لتقسيم مقاعد البرنامج على الأقسام والمدربين.
+  /// نص وليس مفتاحاً خارجياً — اتساقاً مع scopeId ولتفادي دلالات NULL في قيد التفرد.
+  programId         String       @default("") @map("program_id") @db.VarChar(64)
+  organization      Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, scopeType, scopeId, programId, specialtyCode, gender, trainingPeriod], map: "capacity_allocations_org_scope_program_key")
+  @@index([organizationId, scopeType])
+  @@index([organizationId, programId])
+  @@index([trainingStartDate, trainingEndDate])
+  @@map("capacity_allocations")
+}
+
+/// سجل تخصيص المتدرب — المصدر الرسمي الوحيد لتاريخ التوزيع.
+///
+/// قبل هذا الجدول كان التخصيص أعمدة مسطّحة على training_request_trainees
+/// (assigned_hospital_id / assigned_department_id / assigned_trainer_profile_id)
+/// تُكتب فوق بعضها. إعادة التوزيع كانت تمحو ما قبلها، فلا يمكن إثبات أن تخصيصاً
+/// قديماً أُغلق وآخر جديداً فُتح — وهي بالضبط الحقيقة التي يحتاجها الـTimeline
+/// والتدقيق. هنا كل تغيير صف جديد، والقديم يُعلَّم superseded ولا يُحذف أبداً.
+///
+/// ثابت أساسي: لكل متدرب صف واحد فقط بحالة open في أي لحظة.
+model TraineeAllocation {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  traineeRowId          String                  @map("trainee_row_id") @db.Uuid
+  traineeProfileId      String?                 @map("trainee_profile_id") @db.Uuid
+  academicIntakeId      String?                 @map("academic_intake_id") @db.Uuid
+  trainingRequestId     String?                 @map("training_request_id") @db.Uuid
+  /// التجمع صاحب قرار التوزيع — يُستخدم لفلترة النطاق دون تتبع الطلب.
+  clusterOrgId          String                  @map("cluster_org_id") @db.Uuid
+  hospitalId            String                  @map("hospital_id") @db.Uuid
+  departmentId          String?                 @map("department_id") @db.Uuid
+  trainerProfileId      String?                 @map("trainer_profile_id") @db.Uuid
+  supervisorAccountId   String?                 @map("supervisor_account_id") @db.Uuid
+  /// الحالة السابقة الكاملة — تُنسخ عند الإغلاق ليقرأ الـTimeline الانتقال
+  /// (من أين ← إلى أين) من صف واحد دون ضم.
+  previousAllocationId  String?                 @unique @map("previous_allocation_id") @db.Uuid
+  previousHospitalId    String?                 @map("previous_hospital_id") @db.Uuid
+  previousDepartmentId  String?                 @map("previous_department_id") @db.Uuid
+  previousTrainerId     String?                 @map("previous_trainer_id") @db.Uuid
+  /// open | superseded | closed | cancelled
+  status                String                  @default("open") @db.VarChar(20)
+  /// auto | manual | cluster_reassign | hospital_reassign | hospital_assign
+  action                String                  @db.VarChar(30)
+  reason                String?
+  startDate             DateTime?               @map("start_date") @db.Date
+  endDate               DateTime?               @map("end_date") @db.Date
+  performedById         String?                 @map("performed_by") @db.Uuid
+  performedAt           DateTime                @default(now()) @map("performed_at") @db.Timestamptz(6)
+  closedById            String?                 @map("closed_by") @db.Uuid
+  closedAt              DateTime?               @map("closed_at") @db.Timestamptz(6)
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  traineeRow            TrainingRequestTrainee  @relation(fields: [traineeRowId], references: [id])
+  academicIntake        AcademicIntake?         @relation(fields: [academicIntakeId], references: [id])
+  trainingRequest       TrainingRequest?        @relation(fields: [trainingRequestId], references: [id])
+  cluster               Organization            @relation("AllocationCluster", fields: [clusterOrgId], references: [id])
+  hospital              Organization            @relation("AllocationHospital", fields: [hospitalId], references: [id])
+  department            Department?             @relation(fields: [departmentId], references: [id])
+  trainerProfile        TrainerProfile?         @relation(fields: [trainerProfileId], references: [id])
+  performedBy           UserAccount?            @relation("AllocationPerformer", fields: [performedById], references: [id])
+  previousAllocation    TraineeAllocation?      @relation("AllocationChain", fields: [previousAllocationId], references: [id])
+  nextAllocation        TraineeAllocation?      @relation("AllocationChain")
+
+  @@index([traineeRowId, status])
+  @@index([hospitalId, status])
+  @@index([clusterOrgId, status])
+  @@index([academicIntakeId])
+  @@map("trainee_allocations")
+}
+
+/// تأهيل المدرب للبرامج التدريبية — علاقة متعدد إلى متعدد
+/// المدرب لا يشرف إلا على البرامج المُسندة إليه (قيد صارم في محرك التوزيع).
+model TrainerProgram {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trainerProfileId String         @map("trainer_profile_id") @db.Uuid
+  programId        String         @map("program_id") @db.Uuid
+  /// سعة المدرب ضمن هذا البرنامج تحديداً — إن تُركت فارغة تُستخدم سعة المدرب العامة
+  maxTrainees      Int?           @map("max_trainees")
+  isActive         Boolean        @default(true) @map("is_active")
+  createdById      String?        @map("created_by") @db.Uuid
+  updatedById      String?        @map("updated_by") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  program          Program        @relation(fields: [programId], references: [id])
+  trainerProfile   TrainerProfile @relation(fields: [trainerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([trainerProfileId, programId])
+  @@index([programId])
+  @@map("trainer_programs")
+}
+
+model LookupTable {
+  id        String  @id @default(uuid()) @db.Uuid
+  category  String  @db.VarChar(100)
+  code      String  @db.VarChar(100)
+  nameAr    String  @map("name_ar") @db.VarChar(200)
+  nameEn    String? @map("name_en") @db.VarChar(200)
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+  metadata  Json    @default("{}")
+
+  @@unique([category, code])
+  @@map("lookup_tables")
+}
+
+model Objective {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  departmentId   String              @map("department_id") @db.Uuid
+  traineeLevel   String?             @map("trainee_level") @db.VarChar(30)
+  titleAr        String              @map("title_ar") @db.VarChar(300)
+  titleEn        String?             @map("title_en") @db.VarChar(300)
+  isMandatory    Boolean             @default(true) @map("is_mandatory")
+  sortOrder      Int                 @default(0) @map("sort_order")
+  createdById    String?             @map("created_by") @db.Uuid
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  progress       ObjectiveProgress[]
+  department     Department          @relation(fields: [departmentId], references: [id])
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+
+  @@map("objectives")
+}
+
+model ObjectiveProgress {
+  id               String         @id @default(uuid()) @db.Uuid
+  objectiveId      String         @map("objective_id") @db.Uuid
+  traineeProfileId String         @map("trainee_profile_id") @db.Uuid
+  rotationId       String         @map("rotation_id") @db.Uuid
+  status           String         @default("pending") @db.VarChar(20)
+  completedAt      DateTime?      @map("completed_at") @db.Timestamptz(6)
+  verifiedById     String?        @map("verified_by") @db.Uuid
+  verifiedAt       DateTime?      @map("verified_at") @db.Timestamptz(6)
+  objective        Objective      @relation(fields: [objectiveId], references: [id])
+  rotation         Rotation       @relation(fields: [rotationId], references: [id])
+  traineeProfile   TraineeProfile @relation(fields: [traineeProfileId], references: [id])
+  verifiedBy       UserAccount?   @relation("ObjectiveVerifier", fields: [verifiedById], references: [id])
+
+  @@unique([objectiveId, traineeProfileId, rotationId])
+  @@map("objective_progress")
+}
+
+model ImprovementPlan {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @map("organization_id") @db.Uuid
+  traineeProfileId String         @map("trainee_profile_id") @db.Uuid
+  triggerReason    String         @map("trigger_reason")
+  goals            Json           @default("[]")
+  startDate        DateTime       @map("start_date") @db.Date
+  endDate          DateTime       @map("end_date") @db.Date
+  status           String         @default("active") @db.VarChar(20)
+  progress         Decimal        @default(0) @db.Decimal(5, 2)
+  supervisorId     String?        @map("supervisor_id") @db.Uuid
+  createdById      String?        @map("created_by") @db.Uuid
+  updatedById      String?        @map("updated_by") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        UserAccount?   @relation("PlanCreator", fields: [createdById], references: [id])
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  supervisor       UserAccount?   @relation("PlanSupervisor", fields: [supervisorId], references: [id])
+  traineeProfile   TraineeProfile @relation(fields: [traineeProfileId], references: [id])
+
+  @@map("improvement_plans")
+}
+
+model ClinicalPrivilege {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  departmentId   String       @map("department_id") @db.Uuid
+  traineeLevel   String       @map("trainee_level") @db.VarChar(30)
+  titleAr        String       @map("title_ar") @db.VarChar(300)
+  titleEn        String?      @map("title_en") @db.VarChar(300)
+  privilegeLevel String       @map("privilege_level") @db.VarChar(20)
+  sortOrder      Int          @default(0) @map("sort_order")
+  createdById    String?      @map("created_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  department     Department   @relation(fields: [departmentId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("clinical_privileges")
+}
+
+model DepartmentCommonMistake {
+  id            String     @id @default(uuid()) @db.Uuid
+  departmentId  String     @map("department_id") @db.Uuid
+  titleAr       String     @map("title_ar") @db.VarChar(300)
+  titleEn       String?    @map("title_en") @db.VarChar(300)
+  preventionTip String?    @map("prevention_tip")
+  sortOrder     Int        @default(0) @map("sort_order")
+  department    Department @relation(fields: [departmentId], references: [id])
+
+  @@map("department_common_mistakes")
+}
+
+model DashboardSnapshot {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  dashboardType  String       @map("dashboard_type") @db.VarChar(50)
+  data           Json
+  snapshotDate   DateTime     @map("snapshot_date") @db.Date
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("dashboard_snapshots")
+}
+
+model Task {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  assignedToId   String       @map("assigned_to") @db.Uuid
+  assignedById   String?      @map("assigned_by") @db.Uuid
+  titleAr        String       @map("title_ar") @db.VarChar(300)
+  description    String?
+  dueDate        DateTime?    @map("due_date") @db.Timestamptz(6)
+  status         String       @default("pending") @db.VarChar(20)
+  priority       String       @default("normal") @db.VarChar(10)
+  referenceType  String?      @map("reference_type") @db.VarChar(50)
+  referenceId    String?      @map("reference_id") @db.Uuid
+  completedAt    DateTime?    @map("completed_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  assignedBy     UserAccount? @relation("TaskCreator", fields: [assignedById], references: [id])
+  assignedTo     UserAccount  @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("tasks")
+}
+
+model Incident {
+  id                   String            @id @default(uuid()) @db.Uuid
+  organizationId       String            @map("organization_id") @db.Uuid
+  targetOrganizationId String?           @map("target_organization_id") @db.Uuid
+  reportedById         String            @map("reported_by") @db.Uuid
+  assignedToId         String?           @map("assigned_to") @db.Uuid
+  incidentType         String            @map("incident_type") @db.VarChar(50)
+  category             String?           @db.VarChar(50)
+  description          String
+  severity             String            @default("low") @db.VarChar(20)
+  status               String            @default("open") @db.VarChar(20)
+  escalationLevel      Int               @default(0) @map("escalation_level")
+  resolution           String?
+  evidenceUrls         String[]          @default([]) @map("evidence_urls")
+  resolvedById         String?           @map("resolved_by") @db.Uuid
+  resolvedAt           DateTime?         @map("resolved_at") @db.Timestamptz(6)
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization         Organization      @relation(fields: [organizationId], references: [id])
+  targetOrganization   Organization?     @relation("IncidentTargetOrg", fields: [targetOrganizationId], references: [id])
+  reportedBy           UserAccount       @relation("IncidentReporter", fields: [reportedById], references: [id])
+  assignedTo           UserAccount?      @relation("IncidentAssignee", fields: [assignedToId], references: [id])
+  resolvedBy           UserAccount?      @relation("IncidentResolver", fields: [resolvedById], references: [id])
+  comments             IncidentComment[]
+
+  @@index([organizationId])
+  @@index([targetOrganizationId])
+  @@map("incidents")
+}
+
+model IncidentComment {
+  id         String      @id @default(uuid()) @db.Uuid
+  incidentId String      @map("incident_id") @db.Uuid
+  authorId   String      @map("author_id") @db.Uuid
+  comment    String
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  incident   Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  author     UserAccount @relation(fields: [authorId], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_comments")
+}
+
+/// الإقرارات والتعهدات الوطنية (إقرار الانضمام وإقرار الشؤون الأكاديمية)
+model Declaration {
+  id             String                  @id @default(uuid()) @db.Uuid
+  organizationId String                  @map("organization_id") @db.Uuid
+  type           String                  @db.VarChar(50)
+  titleAr        String                  @map("title_ar") @db.VarChar(300)
+  titleEn        String?                 @map("title_en") @db.VarChar(300)
+  contentAr      String                  @map("content_ar")
+  contentEn      String?                 @map("content_en")
+  version        Int                     @default(1)
+  isActive       Boolean                 @default(true) @map("is_active")
+  isMandatory    Boolean                 @default(true) @map("is_mandatory")
+  createdById    String?                 @map("created_by") @db.Uuid
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  acceptances    DeclarationAcceptance[]
+  organization   Organization            @relation(fields: [organizationId], references: [id])
+
+  @@map("declarations")
+}
+
+/// سجلات الموافقة والتوقيع الرقمي للإقرارات
+model DeclarationAcceptance {
+  id             String       @id @default(uuid()) @db.Uuid
+  declarationId  String       @map("declaration_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  version        Int
+  acceptedAt     DateTime     @default(now()) @map("accepted_at") @db.Timestamptz(6)
+  ipAddress      String?      @map("ip_address") @db.VarChar(50)
+  deviceInfo     String?      @map("device_info") @db.VarChar(300)
+  declaration    Declaration  @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           UserAccount  @relation(fields: [userId], references: [id])
+
+  @@unique([declarationId, userId, version])
+  @@map("declaration_acceptances")
+}
+
+/// مكتبة الإجراءات والمهارات السريرية
+model ProcedureCatalog {
+  id            String               @id @default(uuid()) @db.Uuid
+  code          String               @unique @db.VarChar(50)
+  titleAr       String               @map("title_ar") @db.VarChar(300)
+  titleEn       String               @map("title_en") @db.VarChar(300)
+  category      String               @db.VarChar(100)
+  minRequired   Int                  @default(5) @map("min_required")
+  descriptionAr String?              @map("description_ar")
+  isActive      Boolean              @default(true) @map("is_active")
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  caseLogs      ClinicalCaseLog[]
+  competencies  CompetencyProgress[]
+
+  @@map("procedure_catalogs")
+}
+
+/// سجل الحالة والحالة السريرية للمتدرب (Clinical Case & Procedure Log)
+model ClinicalCaseLog {
+  id                 String            @id @default(uuid()) @db.Uuid
+  organizationId     String            @map("organization_id") @db.Uuid
+  traineeProfileId   String            @map("trainee_profile_id") @db.Uuid
+  trainerProfileId   String?           @map("trainer_profile_id") @db.Uuid
+  rotationId         String?           @map("rotation_id") @db.Uuid
+  departmentId       String?           @map("department_id") @db.Uuid
+  procedureId        String?           @map("procedure_id") @db.Uuid
+  diagnosis          String            @db.VarChar(300)
+  patientAge         Int?              @map("patient_age")
+  patientGender      String?           @map("patient_gender") @db.VarChar(20)
+  specialtyAr        String?           @map("specialty_ar") @db.VarChar(200)
+  complexity         String            @default("medium") @db.VarChar(20)
+  participationLevel String            @default("performed") @map("participation_level") @db.VarChar(50)
+  notes              String?
+  evidenceUrls       String[]          @default([]) @map("evidence_urls")
+  status             String            @default("submitted") @db.VarChar(30)
+  performedAt        DateTime          @default(now()) @map("performed_at") @db.Timestamptz(6)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  department         Department?       @relation(fields: [departmentId], references: [id])
+  organization       Organization      @relation(fields: [organizationId], references: [id])
+  procedure          ProcedureCatalog? @relation(fields: [procedureId], references: [id])
+  rotation           Rotation?         @relation(fields: [rotationId], references: [id])
+  traineeProfile     TraineeProfile    @relation(fields: [traineeProfileId], references: [id])
+  trainerProfile     TrainerProfile?   @relation(fields: [trainerProfileId], references: [id])
+  signoffs           LogbookSignoff[]
+
+  @@index([traineeProfileId])
+  @@index([organizationId])
+  @@map("clinical_case_logs")
+}
+
+/// كفاءات المتدرب ومتابعة التقدم بالمهارات (Competency Tracking)
+model CompetencyProgress {
+  id               String           @id @default(uuid()) @db.Uuid
+  traineeProfileId String           @map("trainee_profile_id") @db.Uuid
+  procedureId      String           @map("procedure_id") @db.Uuid
+  requiredCount    Int              @default(5) @map("required_count")
+  completedCount   Int              @default(0) @map("completed_count")
+  status           String           @default("pending") @db.VarChar(20)
+  lastUpdated      DateTime         @default(now()) @map("last_updated") @db.Timestamptz(6)
+  procedure        ProcedureCatalog @relation(fields: [procedureId], references: [id])
+  traineeProfile   TraineeProfile   @relation(fields: [traineeProfileId], references: [id])
+
+  @@unique([traineeProfileId, procedureId])
+  @@map("competency_progress")
+}
+
+/// التوقيع والاعتماد الرقمي للحالة / السجل (Digital Sign-off)
+model LogbookSignoff {
+  id           String          @id @default(uuid()) @db.Uuid
+  caseLogId    String          @map("case_log_id") @db.Uuid
+  signerId     String          @map("signer_id") @db.Uuid
+  signerRole   String          @map("signer_role") @db.VarChar(30)
+  signatureUrl String?         @map("signature_url") @db.VarChar(500)
+  feedback     String?
+  signedAt     DateTime        @default(now()) @map("signed_at") @db.Timestamptz(6)
+  caseLog      ClinicalCaseLog @relation(fields: [caseLogId], references: [id], onDelete: Cascade)
+  signer       UserAccount     @relation(fields: [signerId], references: [id])
+
+  @@map("logbook_signoffs")
+}
+
+/// إجازات المدربين وتغطياتهم — لضمان استمرار تدريب المتدربين دون انقطاع
+model TrainerLeave {
+  id                   String                @id @default(uuid()) @db.Uuid
+  trainerProfileId     String                @map("trainer_profile_id") @db.Uuid
+  organizationId       String                @map("organization_id") @db.Uuid
+  /// annual_leave | emergency_leave | sick_leave | maternity_leave
+  /// training_course | conference | temporary_assignment
+  /// transfer | retirement | resignation
+  leaveType            String                @map("leave_type") @db.VarChar(30)
+  startDate            DateTime              @map("start_date") @db.Date
+  endDate              DateTime              @map("end_date") @db.Date
+  /// pending | approved | active | completed | cancelled
+  status               String                @default("pending") @db.VarChar(20)
+  reason               String?
+  replacementTrainerId String?               @map("replacement_trainer_id") @db.Uuid
+  autoReassigned       Boolean               @default(false) @map("auto_reassigned")
+  approvedById         String?               @map("approved_by") @db.Uuid
+  approvedAt           DateTime?             @map("approved_at") @db.Timestamptz(6)
+  createdById          String?               @map("created_by") @db.Uuid
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization         Organization          @relation(fields: [organizationId], references: [id])
+  replacementTrainer   TrainerProfile?       @relation("ReplacementLeaves", fields: [replacementTrainerId], references: [id])
+  trainerProfile       TrainerProfile        @relation("TrainerLeaves", fields: [trainerProfileId], references: [id])
+  reassignments        TrainerReassignment[]
+
+  @@index([trainerProfileId, status])
+  @@index([organizationId, startDate])
+  @@map("trainer_leaves")
+}
+
+/// سجل إعادة الإسناد — immutable audit trail لنقل المتدربين بين المدربين
+model TrainerReassignment {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  organizationId        String                       @map("organization_id") @db.Uuid
+  /// single | multiple | entire_trainer | entire_department
+  reassignmentType      String                       @map("reassignment_type") @db.VarChar(30)
+  /// annual_leave | emergency_leave | sick_leave | maternity_leave
+  /// training_course | conference | temporary_assignment | transfer
+  /// retirement | resignation | capacity_overflow | department_closure
+  /// administrative_decision
+  reason                String                       @db.VarChar(50)
+  previousTrainerId     String                       @map("previous_trainer_id") @db.Uuid
+  newTrainerId          String                       @map("new_trainer_id") @db.Uuid
+  departmentId          String                       @map("department_id") @db.Uuid
+  trainerLeaveId        String?                      @map("trainer_leave_id") @db.Uuid
+  effectiveDate         DateTime                     @map("effective_date") @db.Timestamptz(6)
+  previousAssignmentEnd DateTime?                    @map("previous_assignment_end") @db.Timestamptz(6)
+  notes                 String?
+  approvedById          String?                      @map("approved_by") @db.Uuid
+  createdById           String                       @map("created_by") @db.Uuid
+  createdAt             DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  trainees              TrainerReassignmentTrainee[]
+  department            Department                   @relation(fields: [departmentId], references: [id])
+  newTrainer            TrainerProfile               @relation("ReassignmentTo", fields: [newTrainerId], references: [id])
+  organization          Organization                 @relation(fields: [organizationId], references: [id])
+  previousTrainer       TrainerProfile               @relation("ReassignmentFrom", fields: [previousTrainerId], references: [id])
+  trainerLeave          TrainerLeave?                @relation(fields: [trainerLeaveId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([previousTrainerId])
+  @@index([newTrainerId])
+  @@map("trainer_reassignments")
+}
+
+/// تفصيل المتدربين المنقولين في كل عملية إعادة إسناد
+model TrainerReassignmentTrainee {
+  id                String              @id @default(uuid()) @db.Uuid
+  reassignmentId    String              @map("reassignment_id") @db.Uuid
+  traineeProfileId  String              @map("trainee_profile_id") @db.Uuid
+  rotationId        String              @map("rotation_id") @db.Uuid
+  previousTrainerId String              @map("previous_trainer_id") @db.Uuid
+  newTrainerId      String              @map("new_trainer_id") @db.Uuid
+  reassignment      TrainerReassignment @relation(fields: [reassignmentId], references: [id], onDelete: Cascade)
+  rotation          Rotation            @relation(fields: [rotationId], references: [id])
+  traineeProfile    TraineeProfile      @relation(fields: [traineeProfileId], references: [id])
+
+  @@index([reassignmentId])
+  @@map("trainer_reassignment_trainees")
+}
+
+/// الخطة والجدول التدريبي — الإطار التنظيمي العام للجدول
+model TrainingSchedule {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @map("organization_id") @db.Uuid
+  departmentId     String?               @map("department_id") @db.Uuid
+  titleAr          String                @map("title_ar") @db.VarChar(300)
+  titleEn          String?               @map("title_en") @db.VarChar(300)
+  startDate        DateTime              @map("start_date") @db.Date
+  endDate          DateTime              @map("end_date") @db.Date
+  status           String                @default("draft") @db.VarChar(20) // draft | review | approved | published | locked | archived
+  totalHours       Int                   @default(0) @map("total_hours")
+  notes            String?
+  createdById      String?               @map("created_by") @db.Uuid
+  updatedById      String?               @map("updated_by") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization     Organization          @relation(fields: [organizationId], references: [id])
+  department       Department?           @relation(fields: [departmentId], references: [id])
+  createdBy        UserAccount?          @relation("ScheduleCreator", fields: [createdById], references: [id])
+  participants     ScheduleParticipant[]
+  sessions         ScheduleSession[]
+  revisions        ScheduleRevision[]
+
+  @@index([organizationId, status])
+  @@map("training_schedules")
+  trainingEvents TrainingEvent[]
+}
+
+/// مشاركو الجدول — ربط الجدول بمتدرب واحد أو مجموعة متدربين
+model ScheduleParticipant {
+  id               String           @id @default(uuid()) @db.Uuid
+  scheduleId       String           @map("schedule_id") @db.Uuid
+  traineeProfileId String           @map("trainee_profile_id") @db.Uuid
+  joinedAt         DateTime         @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  schedule         TrainingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  traineeProfile   TraineeProfile   @relation(fields: [traineeProfileId], references: [id])
+
+  @@unique([scheduleId, traineeProfileId])
+  @@map("schedule_participants")
+}
+
+/// قالب الجداول والشيفتات — لإعادة الاستخدام في الأقسام
+model ScheduleTemplate {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  departmentId   String?      @map("department_id") @db.Uuid
+  nameAr         String       @map("name_ar") @db.VarChar(200)
+  nameEn         String?      @map("name_en") @db.VarChar(200)
+  structureJson  Json         @default("[]") @map("structure_json")
+  isActive       Boolean      @default(true) @map("is_active")
+  createdById    String?      @map("created_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  department     Department?  @relation(fields: [departmentId], references: [id])
+
+  @@map("schedule_templates")
+}
+
+/// جلسة تدريبية فعليّة ضمن الجدول
+model ScheduleSession {
+  id               String           @id @default(uuid()) @db.Uuid
+  scheduleId       String           @map("schedule_id") @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  departmentId     String           @map("department_id") @db.Uuid
+  trainerProfileId String?          @map("trainer_profile_id") @db.Uuid
+  traineeProfileId String?          @map("trainee_profile_id") @db.Uuid
+  date             DateTime         @db.Date
+  startTime        String           @map("start_time") @db.VarChar(10) // "08:00"
+  endTime          String           @map("end_time") @db.VarChar(10)   // "16:00"
+  durationHours    Decimal          @map("duration_hours") @db.Decimal(4, 2)
+  sessionType      String           @default("clinical_round") @map("session_type") @db.VarChar(50) // clinical_round | emergency_shift | lecture | workshop | call
+  shiftType        String           @default("morning") @map("shift_type") @db.VarChar(20) // morning | evening | night | 24h
+  location         String?          @db.VarChar(200)
+  capacity         Int              @default(1)
+  status           String           @default("scheduled") @db.VarChar(20) // scheduled | completed | cancelled
+  notes            String?
+
+  schedule         TrainingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  department       Department       @relation(fields: [departmentId], references: [id])
+  trainerProfile   TrainerProfile?  @relation(fields: [trainerProfileId], references: [id])
+  traineeProfile   TraineeProfile?  @relation(fields: [traineeProfileId], references: [id])
+
+  @@index([scheduleId])
+  @@index([organizationId, date])
+  @@index([trainerProfileId, date])
+  @@index([traineeProfileId, date])
+  @@map("schedule_sessions")
+}
+
+/// سجل تعديلات وإصدارات الجداول المنشورة — Version Snapshot
+model ScheduleRevision {
+  id            String           @id @default(uuid()) @db.Uuid
+  scheduleId    String           @map("schedule_id") @db.Uuid
+  revision      Int              @default(1)
+  snapshot      Json             @map("snapshot")
+  oldValues     Json?            @map("old_values")
+  newValues     Json?            @map("new_values")
+  changeReason  String?          @map("change_reason")
+  publishedById String?          @map("published_by") @db.Uuid
+  publishedAt   DateTime         @default(now()) @map("published_at") @db.Timestamptz(6)
+
+  schedule      TrainingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  publishedBy   UserAccount?     @relation(fields: [publishedById], references: [id])
+
+  @@map("schedule_revisions")
+}
+
+/// فعالية تدريبية تشغيلية — طبقة موحّدة للنداءات والدورات والمحاضرات
+/// والاجتماعات والمهام والإعلانات. تحل محل إنشاء نموذج لكل نوع.
+///
+/// ليست إسناداً ولا توزيعاً: الفعالية نشاط تشغيلي يجري *بعد* أن يحدّد
+/// Assignment/Rotation من يتبع من. لا يجوز لأي فعالية أن تغيّر إسناداً أو
+/// روتيشن أو تبعية مستشفى — العلاقات تُقرأ منها ولا تُكتب فيها.
+///
+/// TrainerCall يبقى كما هو (مدرب ← متدربوه) ولا تستبدله هذه الطبقة.
+model TrainingEvent {
+  id             String                   @id @default(uuid()) @db.Uuid
+  /// الجهة المالكة للفعالية — تُشتق من جلسة المنشئ، لا من الطلب.
+  organizationId String                   @map("organization_id") @db.Uuid
+  createdById    String                   @map("created_by") @db.Uuid
+  /// urgent_call | training_course | lecture | training_session | video |
+  /// meeting | task | announcement — نص وفق اصطلاح بقية المخطط لا enum.
+  eventType      String                   @map("event_type") @db.VarChar(30)
+  title          String                   @db.VarChar(200)
+  description    String?
+  priority       String                   @default("normal") @db.VarChar(20)
+  /// information_only | acknowledge | accept_decline | attendance | arrival |
+  /// completion — يحدّد الإجراءات المتاحة للمستلم.
+  responseMode   String                   @map("response_mode") @db.VarChar(30)
+  /// تعريف الجمهور كما اختاره المنشئ. يُحفظ للتدقيق فقط؛ المستلمون
+  /// المحسوبون في TrainingEventRecipient هم المرجع الفعلي.
+  audienceType   String                   @map("audience_type") @db.VarChar(30)
+  /// روابط اختيارية بالسياق التدريبي. اختيارية بالضرورة: دورة يرسلها مدير
+  /// التجمع لكل المدربين لا روتيشن لها ولا جدول. الفعالية تقرأ هذه العلاقات
+  /// ولا تكتب فيها — لا تغيّر إسناداً ولا روتيشن ولا جدولاً.
+  rotationId     String?                  @map("rotation_id") @db.Uuid
+  scheduleId     String?                  @map("schedule_id") @db.Uuid
+  /// مورد الفعالية (فيديو تدريبي مثلاً) من مخزن الملفات القائم — لا نظام جديد.
+  resourceFileId String?                  @map("resource_file_id") @db.Uuid
+  startAt        DateTime?                @map("start_at") @db.Timestamptz(6)
+  endAt          DateTime?                @map("end_at") @db.Timestamptz(6)
+  /// draft | sent | completed | cancelled
+  status         String                   @default("draft") @db.VarChar(20)
+  sentAt         DateTime?                @map("sent_at") @db.Timestamptz(6)
+  completedAt    DateTime?                @map("completed_at") @db.Timestamptz(6)
+  createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization             @relation(fields: [organizationId], references: [id])
+  createdBy      UserAccount              @relation("TrainingEventCreator", fields: [createdById], references: [id])
+  rotation       Rotation?                @relation(fields: [rotationId], references: [id])
+  schedule       TrainingSchedule?        @relation(fields: [scheduleId], references: [id])
+  resourceFile   StoredFile?              @relation(fields: [resourceFileId], references: [id])
+  recipients     TrainingEventRecipient[]
+
+  @@index([organizationId, status])
+  @@index([createdById])
+  @@map("training_events")
+}
+
+/// مستلم واحد لفعالية. الصف هو الإذن: لا يستطيع حساب التفاعل مع فعالية
+/// ليس له صف فيها، فلا حاجة لإعادة فحص الجمهور عند كل استجابة.
+model TrainingEventRecipient {
+  id                 String          @id @default(uuid()) @db.Uuid
+  eventId            String          @map("event_id") @db.Uuid
+  recipientAccountId String          @map("recipient_account_id") @db.Uuid
+  /// أي الملفين كان مصدر الاستحقاق وقت الحل — للتدقيق.
+  trainerProfileId   String?         @map("trainer_profile_id") @db.Uuid
+  traineeProfileId   String?         @map("trainee_profile_id") @db.Uuid
+  /// pending | acknowledged | accepted | declined | attending | arrived |
+  /// confirmed | completed
+  status             String          @default("pending") @db.VarChar(20)
+  acknowledgedAt     DateTime?       @map("acknowledged_at") @db.Timestamptz(6)
+  acceptedAt         DateTime?       @map("accepted_at") @db.Timestamptz(6)
+  declinedAt         DateTime?       @map("declined_at") @db.Timestamptz(6)
+  attendedAt         DateTime?       @map("attended_at") @db.Timestamptz(6)
+  /// إقرار ذاتي من المستلم — يقابله confirmedAt الذي يكتبه المخوَّل وحده.
+  arrivedAt          DateTime?       @map("arrived_at") @db.Timestamptz(6)
+  confirmedAt        DateTime?       @map("confirmed_at") @db.Timestamptz(6)
+  confirmedById      String?         @map("confirmed_by") @db.Uuid
+  completedAt        DateTime?       @map("completed_at") @db.Timestamptz(6)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  event              TrainingEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  recipientAccount   UserAccount     @relation("TrainingEventRecipientAccount", fields: [recipientAccountId], references: [id])
+  confirmedBy        UserAccount?    @relation("TrainingEventConfirmer", fields: [confirmedById], references: [id])
+
+  /// يمنع تكرار المستلم على مستوى قاعدة البيانات، فإعادة إرسال الطلب لا
+  /// تنتج صفوفاً ولا إشعارات مكررة حتى لو أخطأ الكود.
+  @@unique([eventId, recipientAccountId])
+  @@index([recipientAccountId, status])
+  @@map("training_event_recipients")
+}

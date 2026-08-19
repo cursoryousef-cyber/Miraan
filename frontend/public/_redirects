@@ -1,0 +1,19 @@
+# SPA history-API fallback.
+#
+# The app uses BrowserRouter, so /logbook, /calls, /hospital?tab=schedules and
+# every other route exists only in the client bundle. Netlify serves the publish
+# directory as static files, so a hard load or a refresh on any of those paths
+# looks for a file that was never built and answers 404. The notification
+# routing depends on exactly these deep links working from a cold load.
+#
+# The two vercel.json files in this repo declared this same rewrite, and Netlify
+# does not read them.
+#
+# This file is not build configuration: Vite copies public/ verbatim into the
+# publish directory, and the rule below only describes routing. It sets no build
+# command, publish directory or plugin, so it cannot conflict with whatever is
+# configured in the Netlify dashboard. It is also inert on any other host.
+#
+# 200 (rewrite), not 301/302: the browser must keep the requested URL so the
+# router can read the path and the query string.
+/*    /index.html   200

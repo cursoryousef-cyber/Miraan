@@ -1,0 +1,84 @@
+name: Bidirectional Repository Sync
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bidirectional-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Miran
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "cursoryousef-cyber-sync"
+          git config user.email "cursoryousef-cyber-sync@users.noreply.github.com"
+
+      - name: Fetch drfawaz
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          git remote add drfawaz "https://x-access-token:${SYNC_TOKEN}@github.com/aburakan4551/drfawaz.git"
+          git fetch drfawaz main --prune
+
+      - name: Determine sync direction
+        id: direction
+        run: |
+          MIRAN=$(git rev-parse origin/main)
+          DRFAWAZ=$(git rev-parse drfawaz/main)
+
+          echo "Miran:   $MIRAN"
+          echo "drfawaz: $DRFAWAZ"
+
+          if [ "$MIRAN" = "$DRFAWAZ" ]; then
+            echo "direction=none" >> "$GITHUB_OUTPUT"
+            echo "Repositories are already synchronized."
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor drfawaz/main origin/main; then
+            echo "direction=miran_to_drfawaz" >> "$GITHUB_OUTPUT"
+            echo "Miran is ahead of drfawaz."
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor origin/main drfawaz/main; then
+            echo "direction=drfawaz_to_miran" >> "$GITHUB_OUTPUT"
+            echo "drfawaz is ahead of Miran."
+            exit 0
+          fi
+
+          echo "direction=diverged" >> "$GITHUB_OUTPUT"
+          echo "::error::Repositories have diverged. Manual merge required."
+          exit 1
+
+      - name: Sync Miran → drfawaz
+        if: steps.direction.outputs.direction == 'miran_to_drfawaz'
+        run: |
+          git push drfawaz origin/main:main
+          echo "Miran → drfawaz synchronization completed."
+
+      - name: Sync drfawaz → Miran
+        if: steps.direction.outputs.direction == 'drfawaz_to_miran'
+        run: |
+          git push origin drfawaz/main:main
+          echo "drfawaz → Miran synchronization completed."
+
+      - name: Already synchronized
+        if: steps.direction.outputs.direction == 'none'
+        run: |
+          echo "Both repositories are already synchronized."

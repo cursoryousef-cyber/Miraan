@@ -1,0 +1,117 @@
+name: Deploy staging web to Netlify
+
+# Netlify's own Git integration builds this repository under a plan that allows
+# one Git contributor on a private repo, and the history carries two real ones:
+# aburakan4551 authored 240 of the ~250 commits, cursoryousef-cyber the rest.
+# Deploys therefore fail with "unrecognized Git contributor" no matter who wrote
+# the newest commit, and the only alternatives were rewriting 240 commits of
+# real authorship or paying for a second seat.
+#
+# This builds the site here instead and hands Netlify the finished directory.
+# A direct deploy uploads files; it never inspects the commit graph, so the
+# contributor gate does not apply. Git history is untouched.
+#
+# Netlify's Git-based build for this site should be disconnected once this runs,
+# otherwise both paths deploy the same site and race each other.
+
+on:
+  push:
+    branches:
+      - staging
+  # Re-deploy the current staging HEAD without inventing a commit — needed when
+  # a deploy fails for an infrastructure reason rather than a code one.
+  workflow_dispatch:
+
+# Least privilege: read the code, nothing else. This workflow cannot commit,
+# push, or open anything, by construction rather than by convention.
+permissions:
+  contents: read
+
+# A newer push supersedes one still deploying, so the site cannot end up
+# serving the older of two in-flight builds.
+concurrency:
+  group: staging-netlify
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build frontend and deploy to Netlify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout staging
+        uses: actions/checkout@v4
+
+      # Node 20 and the cache path are copied from the existing frontend-build
+      # job in ci.yml rather than chosen here, so the two stay in step.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        env:
+          # The bundle bakes this in at build time, and api/client.ts falls back
+          # to the PRODUCTION backend when it is unset — so an unset value here
+          # would silently point the staging site at production data. Set the
+          # repository variable VITE_API_URL to override; the default below is
+          # the staging backend, never production.
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://miran-backend-staging.onrender.com/api/v1' }}
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          set -euo pipefail
+          missing=0
+
+          if [ ! -f frontend/dist/index.html ]; then
+            echo "::error::frontend/dist/index.html is missing — the build produced no entry point"
+            missing=1
+          fi
+
+          # Without this file every deep link 404s on Netlify: the app uses
+          # BrowserRouter, so /logbook and friends exist only in the bundle and
+          # need the history-API fallback. Its absence is a silent, total
+          # regression of routing, so the deploy stops here rather than shipping
+          # a site where only "/" works.
+          if [ ! -f frontend/dist/_redirects ]; then
+            echo "::error::frontend/dist/_redirects is missing — SPA deep links would return 404"
+            missing=1
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Contents of frontend/dist:"
+            ls -la frontend/dist || true
+            exit 1
+          fi
+
+          echo "index.html   : present"
+          echo "_redirects   : present"
+          cat frontend/dist/_redirects
+
+      # Reached only when the build and the checks above succeeded, so a broken
+      # build can never replace a working site.
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NETLIFY_AUTH_TOKEN:-}" ] || [ -z "${NETLIFY_SITE_ID:-}" ]; then
+            echo "::error::NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID must be set as repository secrets"
+            exit 1
+          fi
+          # --prod publishes to the site's primary URL. That is this site's
+          # staging environment; it is unrelated to the application's production
+          # backend, which this workflow never touches.
+          npx --yes netlify-cli@17 deploy \
+            --dir=frontend/dist \
+            --prod \
+            --message "staging ${GITHUB_SHA} via GitHub Actions"

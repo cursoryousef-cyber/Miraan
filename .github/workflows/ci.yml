@@ -1,0 +1,225 @@
+name: Miran Platform CI / Build Environment Audit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-build:
+    name: Build & Verify NestJS Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Generate Prisma Client
+        run: |
+          cd backend
+          npx prisma generate
+
+      - name: Build NestJS Application
+        run: |
+          cd backend
+          npm run build
+
+      - name: Run Backend Unit Tests
+        run: |
+          cd backend
+          npm test
+
+  frontend-build:
+    name: Build & Verify Web Dashboard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build React Dashboard
+        run: |
+          cd frontend
+          npm run build
+
+  ios-build-archive:
+    name: Runner Xcode & SDK Audit iOS Build
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate Automatic iOS Version & Build Number
+        run: |
+          git fetch --tags origin || true
+
+          BASE_COMMIT="4ea1d79f04ee881a5eacae9d13db1b606f236ff4"
+          BASE_MAJOR="1"
+          BASE_MINOR="15"
+
+          if git merge-base --is-ancestor "$BASE_COMMIT" HEAD 2>/dev/null; then
+            COMMITS_SINCE_BASE=$(git rev-list --count "$BASE_COMMIT"..HEAD)
+          else
+            COMMITS_SINCE_BASE=0
+          fi
+
+          CALCULATED_MINOR=$((BASE_MINOR + COMMITS_SINCE_BASE))
+          MARKETING_VERSION="${BASE_MAJOR}.${CALCULATED_MINOR}"
+
+          RUN_NUM="${GITHUB_RUN_NUMBER:-1}"
+          RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT:-1}"
+          if [ "$RUN_ATTEMPT" -gt 1 ]; then
+            BUILD_NUMBER="$(( 100 + RUN_NUM )).${RUN_ATTEMPT}"
+          else
+            BUILD_NUMBER="$(( 100 + RUN_NUM ))"
+          fi
+
+          perl -pi -e "s/MARKETING_VERSION = .*/MARKETING_VERSION = ${MARKETING_VERSION};/g" Miran.xcodeproj/project.pbxproj
+          perl -pi -e "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = ${BUILD_NUMBER};/g" Miran.xcodeproj/project.pbxproj
+
+          echo "MARKETING_VERSION=${MARKETING_VERSION}" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_ENV
+
+          echo "================================================="
+          echo "Calculated Marketing Version : ${MARKETING_VERSION}"
+          echo "Calculated Build Number      : ${BUILD_NUMBER}"
+          echo "================================================="
+
+      - name: Audit Build Environment
+        run: |
+          echo "================ Xcode Version ================"
+          xcodebuild -version
+
+          echo "================ Active Developer ================"
+          xcode-select -p
+
+          echo "================ iPhoneOS SDK ================"
+          xcrun --sdk iphoneos --show-sdk-version
+
+          echo "================ Installed SDKs ================"
+          xcodebuild -showsdks
+
+          echo "================ Installed Xcode Apps ================"
+          ls -1 /Applications | grep Xcode || true
+
+          echo "================ DEVELOPER_DIR ================"
+          echo "${DEVELOPER_DIR:-Not Set}"
+
+          echo "================ Build Settings ================"
+          xcodebuild \
+            -project Miran.xcodeproj \
+            -scheme Miran \
+            -showBuildSettings | grep -E "SDKROOT|SDK_NAME|DEVELOPER_DIR|TOOLCHAINS|IPHONEOS_DEPLOYMENT_TARGET|SUPPORTED_PLATFORMS|EFFECTIVE_PLATFORM_NAME"
+
+          echo "================ xcrun Paths ================"
+          xcrun --find xcodebuild
+
+          echo "================ Archive Toolchain ================"
+          xcrun xcodebuild -version
+
+      - name: Build & Archive iOS Native App
+        run: |
+          mkdir -p build
+          xcodebuild -project Miran.xcodeproj \
+            -scheme Miran \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Miran.xcarchive \
+            MARKETING_VERSION="${MARKETING_VERSION}" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
+            CODE_SIGNING_ALLOWED=NO \
+            ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_FRAMEWORKS=NO \
+            ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS=NO \
+            archive
+
+      - name: Package & Export Miran.ipa
+        run: |
+          mkdir -p build/Export/Payload
+          cp -R build/Miran.xcarchive/Products/Applications/Miran.app build/Export/Payload/
+          cd build/Export && zip -q -r Miran.ipa Payload
+          echo "IPA generated successfully at build/Export/Miran.ipa"
+
+      - name: Inspect & Verify IPA Version Parity
+        run: |
+          mkdir -p build/InspectIPA
+          unzip -q build/Export/Miran.ipa -d build/InspectIPA
+
+          IPA_INFO_PLIST="build/InspectIPA/Payload/Miran.app/Info.plist"
+
+          if [ ! -f "$IPA_INFO_PLIST" ]; then
+            echo "❌ CRITICAL ERROR: Info.plist missing inside exported IPA!"
+            exit 1
+          fi
+
+          IPA_MARKETING_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$IPA_INFO_PLIST" 2>/dev/null || plutil -extract CFBundleShortVersionString raw "$IPA_INFO_PLIST" 2>/dev/null || true)
+          IPA_BUILD_NUM=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$IPA_INFO_PLIST" 2>/dev/null || plutil -extract CFBundleVersion raw "$IPA_INFO_PLIST" 2>/dev/null || true)
+
+          echo "================================================="
+          echo "Workflow Target Marketing Version : ${MARKETING_VERSION}"
+          echo "Workflow Target Build Number      : ${BUILD_NUMBER}"
+          echo "IPA Embedded CFBundleShortVersion : ${IPA_MARKETING_VER}"
+          echo "IPA Embedded CFBundleVersion      : ${IPA_BUILD_NUM}"
+          echo "================================================="
+
+          if [ "$IPA_MARKETING_VER" != "$MARKETING_VERSION" ]; then
+            echo "❌ VERSION PARITY MISMATCH: IPA version ($IPA_MARKETING_VER) does not match expected workflow version ($MARKETING_VERSION)!"
+            exit 1
+          fi
+
+          if [ "$IPA_BUILD_NUM" != "$BUILD_NUMBER" ]; then
+            echo "❌ BUILD NUMBER PARITY MISMATCH: IPA build number ($IPA_BUILD_NUM) does not match expected workflow build number ($BUILD_NUMBER)!"
+            exit 1
+          fi
+
+          echo "IPA_MARKETING_VER=${IPA_MARKETING_VER}" >> $GITHUB_ENV
+          echo "IPA_BUILD_NUM=${IPA_BUILD_NUM}" >> $GITHUB_ENV
+          echo "✅ VERSION PARITY VERIFIED SUCCESSFULLY!"
+
+      - name: Generate GitHub Actions Job Summary
+        run: |
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ### 🚀 MIRAN iOS Automatic Versioning & IPA Verification Report
+
+          | Metric | Value |
+          | :--- | :--- |
+          | **Source Commit** | \`${GITHUB_SHA}\` |
+          | **Marketing Version** | \`${MARKETING_VERSION}\` |
+          | **Build Number** | \`${BUILD_NUMBER}\` |
+          | **IPA CFBundleShortVersionString** | \`${IPA_MARKETING_VER}\` |
+          | **IPA CFBundleVersion** | \`${IPA_BUILD_NUM}\` |
+          | **Version Parity Verification** | ✅ PASS |
+          EOF
+
+      - name: Upload Miran.ipa Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Miran-iOS-v${{ env.MARKETING_VERSION }}-build-${{ env.BUILD_NUMBER }}
+          path: build/Export/Miran.ipa
+          retention-days: 14
