@@ -79,6 +79,50 @@ export class SchedulesController {
     return this.schedulesService.publish(id, user, dto.changeReason);
   }
 
+  @Patch('sessions/:sessionId/action')
+  @RequireCapability(CAPABILITIES.SCHEDULE_VIEW, CAPABILITIES.SELF_VIEW, CAPABILITIES.TRAINING_OPERATE)
+  @ApiOperation({ summary: 'تحديث حالة الجلسة أو تسجيل ملاحظة من قبل المدرب (بدء / إنهاء المناوبة)' })
+  async updateSessionAction(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: IAuthenticatedUser,
+    @Body() dto: { status?: string; notes?: string },
+  ) {
+    return this.schedulesService.updateSessionAction(sessionId, user, dto);
+  }
+
+  @Post('sessions/:sessionId/change-request')
+  @RequireCapability(CAPABILITIES.SCHEDULE_VIEW, CAPABILITIES.SELF_VIEW)
+  @ApiOperation({ summary: 'طلب تعديل مناوبة / جلسة تدريبية إلى إدارة التدريب' })
+  async requestSessionChange(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: IAuthenticatedUser,
+    @Body() dto: { proposedDate?: string; proposedStartTime?: string; proposedEndTime?: string; reason: string },
+  ) {
+    return this.schedulesService.requestSessionChange(sessionId, user, dto);
+  }
+
+  @Post('sessions/:sessionId/swap-request')
+  @RequireCapability(CAPABILITIES.SCHEDULE_VIEW, CAPABILITIES.SELF_VIEW)
+  @ApiOperation({ summary: 'طلب تبديل مناوبة مع مدرب بديل' })
+  async requestSessionSwap(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: IAuthenticatedUser,
+    @Body() dto: { targetTrainerId?: string; targetTrainerName?: string; proposedDate?: string; reason: string },
+  ) {
+    return this.schedulesService.requestSessionSwap(sessionId, user, dto);
+  }
+
+  @Post('sessions/:sessionId/attendance')
+  @RequireCapability(CAPABILITIES.SCHEDULE_VIEW, CAPABILITIES.SELF_VIEW, CAPABILITIES.TRAINING_OPERATE)
+  @ApiOperation({ summary: 'تسجيل وتوثيق حضور المتدرب في الجلسة المناوبة' })
+  async recordSessionAttendance(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: IAuthenticatedUser,
+    @Body() dto: { traineeProfileId: string; status?: string; checkIn?: string; notes?: string },
+  ) {
+    return this.schedulesService.recordSessionAttendance(sessionId, user, dto);
+  }
+
   @Delete('sessions/:sessionId')
   @RequireCapability(CAPABILITIES.SCHEDULE_UPDATE)
   @ApiOperation({ summary: 'حذف جلسة تدريبية من الجدول' })

@@ -70,10 +70,28 @@ export class LogbookController {
   private async assertTrainerScope(user: IAuthenticatedUser, traineeProfileId: string): Promise<void> {
     if (user.roles.includes('platform_owner')) return;
 
-    if (user.roles.includes('trainer')) {
-      const trainer = await this.prisma.trainerProfile.findFirst({
-        where: { person: { userAccounts: { some: { id: user.accountId } } } },
+    const isSupervisor = user.roles.some((r) =>
+      ['hospital_training_admin', 'org_manager', 'academic_supervisor', 'cluster_administrator', 'training_director'].includes(r),
+    );
+
+    if (user.roles.includes('trainer') && !isSupervisor) {
+      let trainer = await this.prisma.trainerProfile.findFirst({
+        where: {
+          OR: [
+            { person: { userAccounts: { some: { id: user.accountId } } } },
+            ...(user.personId ? [{ personId: user.personId }] : []),
+          ],
+        },
       });
+      if (!trainer && user.personId) {
+        trainer = await this.prisma.trainerProfile.create({
+          data: {
+            personId: user.personId,
+            organizationId: user.organizationId,
+            maxTrainees: 5,
+          },
+        });
+      }
       if (!trainer) throw new ForbiddenException('لا يوجد ملف مدرب مرتبط بهذا الحساب');
 
       const assigned =
@@ -81,17 +99,27 @@ export class LogbookController {
           where: { traineeProfileId, trainerProfileId: trainer.id, status: 'open' },
         })) ||
         (await this.prisma.rotation.findFirst({
-          where: { traineeProfileId, trainerProfileId: trainer.id, status: { in: ['scheduled', 'active'] } },
-        }));
+          where: { traineeProfileId, trainerProfileId: trainer.id, status: { in: ['scheduled', 'active', 'completed'] } },
+        })) ||
+        (this.prisma.scheduleSession?.findFirst
+          ? await this.prisma.scheduleSession.findFirst({
+              where: { traineeProfileId, trainerProfileId: trainer.id },
+            })
+          : null);
       if (!assigned) {
         throw new ForbiddenException('غير مصرح لك بالوصول لبيانات متدرب غير مسند إليك');
       }
       return;
     }
 
-    if (user.roles.includes('trainee')) {
+    if (user.roles.includes('trainee') && !isSupervisor) {
       const own = await this.prisma.traineeProfile.findFirst({
-        where: { person: { userAccounts: { some: { id: user.accountId } } } },
+        where: {
+          OR: [
+            { person: { userAccounts: { some: { id: user.accountId } } } },
+            ...(user.personId ? [{ personId: user.personId }] : []),
+          ],
+        },
       });
       if (own?.id !== traineeProfileId) {
         throw new ForbiddenException('غير مصرح بالوصول لبيانات متدرب آخر');
@@ -460,7 +488,7 @@ export class LogbookController {
         caseLogId: logId,
         signerId: user.accountId,
         signerRole: isAcademic ? 'academic_supervisor' : 'trainer',
-        signatureUrl: dto.signatureUrl,
+        signatureUrl: dto.signatureUrl ? (dto.signatureUrl.length > 500 ? dto.signatureUrl.slice(0, 500) : dto.signatureUrl) : null,
         feedback: dto.feedback,
         signedAt: new Date(),
       },

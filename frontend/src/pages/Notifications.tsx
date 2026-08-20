@@ -20,7 +20,7 @@ import {
 export const Notifications: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { hasAnyRole } = useAuth();
+  const { isAuthenticated, hasAnyRole } = useAuth();
   const isUniversity = hasAnyRole(['university_administrator', 'academic_affairs']);
   const isCluster = hasAnyRole(['cluster_manager', 'cluster_administrator', 'training_director']);
   const isHospital = hasAnyRole(['hospital_training_admin']);
@@ -28,11 +28,13 @@ export const Notifications: React.FC = () => {
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: async () => (await apiClient.get('/notifications/unread-count')).data?.data ?? { count: 0 },
+    enabled: isAuthenticated,
   });
 
   const { data: notifications, isLoading, error, refetch } = useQuery({
     queryKey: ['notifications-page-list'],
     queryFn: async () => (await apiClient.get('/notifications', { params: { limit: 50 } })).data?.data ?? [],
+    enabled: isAuthenticated,
   });
 
   const invalidate = () => {

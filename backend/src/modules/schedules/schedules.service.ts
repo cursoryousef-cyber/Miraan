@@ -665,4 +665,250 @@ export class SchedulesService {
     await this.prisma.trainingSchedule.delete({ where: { id } });
     return { success: true };
   }
+
+  /**
+   * Trainer Shift Workspace Methods
+   */
+  async updateSessionAction(
+    sessionId: string,
+    user: IAuthenticatedUser,
+    dto: { status?: string; notes?: string },
+  ) {
+    const session = await this.prisma.scheduleSession.findFirst({
+      where: { id: sessionId, organizationId: user.organizationId },
+      include: { trainerProfile: true },
+    });
+    if (!session) throw new NotFoundException('الجلسة التدريبية غير موجودة');
+
+    const isSupervisor = user.roles.some((r) =>
+      ['hospital_training_admin', 'org_manager', 'platform_owner', 'cluster_administrator', 'training_director'].includes(r),
+    );
+
+    if (!isSupervisor && user.roles.includes('trainer')) {
+      const trainer = await this.prisma.trainerProfile.findFirst({
+        where: {
+          OR: [
+            { person: { userAccounts: { some: { id: user.accountId } } } },
+            ...(user.personId ? [{ personId: user.personId }] : []),
+          ],
+        },
+      });
+      if (!trainer || session.trainerProfileId !== trainer.id) {
+        throw new ForbiddenException('غير مصرح لك بتعديل حالة جلسة ليست مسندة إليك');
+      }
+    }
+
+    const updated = await this.prisma.scheduleSession.update({
+      where: { id: sessionId },
+      data: {
+        ...(dto.status ? { status: dto.status } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: user.organizationId,
+        actorId: user.accountId,
+        action: 'schedule_session.action',
+        entityType: 'ScheduleSession',
+        entityId: sessionId,
+        newValues: { status: dto.status, notes: dto.notes },
+      },
+    });
+
+    return { success: true, data: updated };
+  }
+
+  async requestSessionChange(
+    sessionId: string,
+    user: IAuthenticatedUser,
+    dto: { proposedDate?: string; proposedStartTime?: string; proposedEndTime?: string; reason: string },
+  ) {
+    const session = await this.prisma.scheduleSession.findFirst({
+      where: { id: sessionId, organizationId: user.organizationId },
+      include: { schedule: true, department: true, traineeProfile: { include: { person: true } } },
+    });
+    if (!session) throw new NotFoundException('الجلسة غير موجودة');
+
+    if (!dto.reason?.trim()) {
+      throw new BadRequestException('سبب طلب التعديل إلزامي');
+    }
+
+    // Find hospital training admins to notify
+    const hospitalAdmins = await this.prisma.userRole.findMany({
+      where: {
+        organizationId: user.organizationId,
+        role: { code: { in: ['hospital_training_admin', 'training_director', 'org_manager'] } },
+      },
+      select: { userAccountId: true },
+    });
+
+    for (const admin of hospitalAdmins) {
+      await this.prisma.notification.create({
+        data: {
+          organizationId: user.organizationId,
+          userId: admin.userAccountId,
+          titleAr: 'طلب تعديل مناوبة / جلسة تدريبية',
+          titleEn: 'Shift Change Request',
+          bodyAr: `طلب تعديل جلسة (${session.sessionType}) بتاريخ ${dto.proposedDate || session.date} — السبب: ${dto.reason}`,
+          type: 'schedule_change_request',
+          referenceType: 'ScheduleSession',
+          referenceId: sessionId,
+          sentVia: 'in_app',
+        },
+      });
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: user.organizationId,
+        actorId: user.accountId,
+        action: 'schedule_session.change_request',
+        entityType: 'ScheduleSession',
+        entityId: sessionId,
+        newValues: dto,
+      },
+    });
+
+    return { success: true, message: 'تم إرسال طلب التعديل إلى إدارة التدريب بالمستشفى' };
+  }
+
+  async requestSessionSwap(
+    sessionId: string,
+    user: IAuthenticatedUser,
+    dto: { targetTrainerId?: string; targetTrainerName?: string; proposedDate?: string; reason: string },
+  ) {
+    const session = await this.prisma.scheduleSession.findFirst({
+      where: { id: sessionId, organizationId: user.organizationId },
+      include: { schedule: true, department: true },
+    });
+    if (!session) throw new NotFoundException('الجلسة غير موجودة');
+
+    if (!dto.reason?.trim()) {
+      throw new BadRequestException('سبب طلب التبديل إلزامي');
+    }
+
+    // Notify target trainer if provided
+    if (dto.targetTrainerId) {
+      const targetTrainer = await this.prisma.trainerProfile.findUnique({
+        where: { id: dto.targetTrainerId },
+        include: { person: { include: { userAccounts: { select: { id: true }, take: 1 } } } },
+      });
+      const targetUserId = targetTrainer?.person?.userAccounts[0]?.id;
+      if (targetUserId) {
+        await this.prisma.notification.create({
+          data: {
+            organizationId: user.organizationId,
+            userId: targetUserId,
+            titleAr: 'طلب تبديل مناوبة وارد إليك',
+            titleEn: 'Shift Swap Request',
+            bodyAr: `طلب تبديل مناوبة (${session.sessionType}) — السبب: ${dto.reason}`,
+            type: 'schedule_swap_request',
+            referenceType: 'ScheduleSession',
+            referenceId: sessionId,
+            sentVia: 'in_app',
+          },
+        });
+      }
+    }
+
+    // Also notify hospital training admins
+    const hospitalAdmins = await this.prisma.userRole.findMany({
+      where: {
+        organizationId: user.organizationId,
+        role: { code: { in: ['hospital_training_admin', 'training_director'] } },
+      },
+      select: { userAccountId: true },
+    });
+
+    for (const admin of hospitalAdmins) {
+      await this.prisma.notification.create({
+        data: {
+          organizationId: user.organizationId,
+          userId: admin.userAccountId,
+          titleAr: 'طلب تبديل مناوبة بين مدربين',
+          titleEn: 'Shift Swap Request',
+          bodyAr: `طلب تبديل مناوبة (${session.sessionType}) إلى مدرب بديل — السبب: ${dto.reason}`,
+          type: 'schedule_swap_request',
+          referenceType: 'ScheduleSession',
+          referenceId: sessionId,
+          sentVia: 'in_app',
+        },
+      });
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: user.organizationId,
+        actorId: user.accountId,
+        action: 'schedule_session.swap_request',
+        entityType: 'ScheduleSession',
+        entityId: sessionId,
+        newValues: dto,
+      },
+    });
+
+    return { success: true, message: 'تم إرسال طلب التبديل بنجاح' };
+  }
+
+  async recordSessionAttendance(
+    sessionId: string,
+    user: IAuthenticatedUser,
+    dto: { traineeProfileId: string; status?: string; checkIn?: string; notes?: string },
+  ) {
+    const session = await this.prisma.scheduleSession.findFirst({
+      where: { id: sessionId, organizationId: user.organizationId },
+    });
+    if (!session) throw new NotFoundException('الجلسة غير موجودة');
+
+    const status = dto.status || 'present';
+    const date = new Date(session.date);
+
+    const existing = await this.prisma.attendance.findFirst({
+      where: {
+        traineeProfileId: dto.traineeProfileId,
+        date,
+      },
+    });
+
+    let attendanceRecord;
+    if (existing) {
+      attendanceRecord = await this.prisma.attendance.update({
+        where: { id: existing.id },
+        data: {
+          status,
+          approvedById: user.accountId,
+          checkIn: dto.checkIn ? new Date(dto.checkIn) : (existing.checkIn || new Date()),
+          excuseReason: dto.notes || existing.excuseReason,
+        },
+      });
+    } else {
+      attendanceRecord = await this.prisma.attendance.create({
+        data: {
+          organizationId: user.organizationId,
+          traineeProfileId: dto.traineeProfileId,
+          date,
+          status,
+          method: 'trainer_verified',
+          approvedById: user.accountId,
+          checkIn: dto.checkIn ? new Date(dto.checkIn) : new Date(),
+          excuseReason: dto.notes,
+        },
+      });
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: user.organizationId,
+        actorId: user.accountId,
+        action: 'schedule_session.attendance',
+        entityType: 'Attendance',
+        entityId: attendanceRecord.id,
+        newValues: { sessionId, traineeProfileId: dto.traineeProfileId, status },
+      },
+    });
+
+    return { success: true, data: attendanceRecord };
+  }
 }

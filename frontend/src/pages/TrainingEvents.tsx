@@ -406,15 +406,21 @@ export const TrainingEvents: React.FC = () => {
             </FormControl>
           )}
 
-          <Alert severity="info" icon={<Users size={18} />}>
-            سيتم إرسال الفعالية إلى <strong>{previewCount}</strong> مستلم ضمن نطاقك.
-          </Alert>
+          {previewCount === 0 ? (
+            <Alert severity="warning" icon={<Users size={18} />}>
+              لا يوجد مستلمون مطابقون لهذا الجمهور ضمن نطاقك حالياً. لن يتمكن النظام من إرسال الفعالية حتى يتم إسناد متدربين/مدربين إلى حسابك.
+            </Alert>
+          ) : (
+            <Alert severity="info" icon={<Users size={18} />}>
+              سيتم إرسال الفعالية إلى <strong>{previewCount}</strong> مستلم ضمن نطاقك.
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setOpen(false)} disabled={createMut.isPending}>إلغاء</Button>
           <Button
             variant="contained"
-            disabled={createMut.isPending || !form.title.trim() || (isSelectedAudience && form.recipientProfileIds.length === 0)}
+            disabled={createMut.isPending || !form.title.trim() || previewCount === 0 || (isSelectedAudience && form.recipientProfileIds.length === 0)}
             onClick={() => createMut.mutate()}
           >
             {createMut.isPending ? 'جارٍ الإرسال...' : 'إرسال الفعالية'}

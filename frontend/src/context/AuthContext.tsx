@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { hasPermission, RBACAction, RBACScope } from '../utils/rbac';
 
@@ -65,6 +65,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const handleAuthLogout = () => {
+      setUser(null);
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'access_token' && !e.newValue) {
+        setUser(null);
+      }
+    };
+    window.addEventListener('auth:logout', handleAuthLogout);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('auth:logout', handleAuthLogout);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   const primaryRole = extractPrimaryRole(user);
 

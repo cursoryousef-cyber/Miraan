@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogTitle, DialogContent, CircularProgress, Button, TextField, Alert } from '@mui/material';
 import {
-  AlertTriangle, BookOpen, CalendarCheck, CheckSquare, ClipboardCheck,
+  AlertTriangle, BookOpen, CalendarCheck, CalendarDays, CheckSquare, ClipboardCheck,
   PhoneCall, Stethoscope, UserCog, Users, Inbox, LayoutGrid, UserPlus, Zap
 } from 'lucide-react';
 import { apiClient } from '../../api/client';
@@ -411,9 +411,10 @@ export const TrainerDashboard: React.FC = () => {
       <Panel title="الإجراءات والمهام الميدانية السريعة" icon={Zap} tone="primary">
         <QuickActions
           items={[
-            { label: 'اعتماد السجل السريري Logbook', icon: BookOpen, onClick: () => navigate('/logbook'), tone: 'primary', hint: `${pendingLogs} سجل معلق` },
-            { label: 'سلسلة موافقات الإسناد', icon: CheckSquare, onClick: () => navigate('/acceptance-chain'), tone: 'info', hint: 'متابعة الطلبات' },
-            { label: 'نداءات الطوارئ M-CALL', icon: PhoneCall, onClick: () => navigate('/calls'), tone: 'danger', hint: `${activeCalls} نداءات نشطة` },
+            { label: 'مساحة عمل المناوبات والجدول', icon: CalendarDays, onClick: () => navigate('/schedules'), tone: 'primary', hint: 'إدارة الشفتات والحضور' },
+            { label: 'اعتماد السجل السريري Logbook', icon: BookOpen, onClick: () => navigate('/logbook'), tone: 'success', hint: `${pendingLogs} سجل معلق` },
+            { label: 'الفعاليات والنداءات التدريبية', icon: PhoneCall, onClick: () => navigate('/training-events'), tone: 'info', hint: 'إنشاء ومتابعة الفعاليات' },
+            { label: 'سلسلة موافقات الإسناد', icon: CheckSquare, onClick: () => navigate('/acceptance-chain'), tone: 'warning', hint: 'متابعة طلبات المتدربين' },
           ]}
         />
       </Panel>

@@ -311,13 +311,28 @@ export class TrainingEventsService {
   }
 
   private async resolveOwnTrainees(user: IAuthenticatedUser, selection?: string[]) {
-    const trainer = await this.prisma.trainerProfile.findFirst({
-      where: { person: { userAccounts: { some: { id: user.accountId } } } },
+    let trainer = await this.prisma.trainerProfile.findFirst({
+      where: {
+        OR: [
+          { person: { userAccounts: { some: { id: user.accountId } } } },
+          ...(user.personId ? [{ personId: user.personId }] : []),
+        ],
+      },
       select: { id: true },
     });
+    if (!trainer && user.roles?.includes('trainer') && user.personId) {
+      trainer = await this.prisma.trainerProfile.create({
+        data: {
+          personId: user.personId,
+          organizationId: user.organizationId,
+          maxTrainees: 5,
+        },
+        select: { id: true },
+      });
+    }
     if (!trainer) throw new ForbiddenException('لا يوجد ملف مدرب مرتبط بهذا الحساب');
 
-    const [byRotation, byAllocation] = await Promise.all([
+    const [byRotation, byAllocation, bySession] = await Promise.all([
       this.prisma.rotation.findMany({
         where: { trainerProfileId: trainer.id, status: { in: ['scheduled', 'active'] } },
         select: { traineeProfileId: true },
@@ -326,12 +341,19 @@ export class TrainingEventsService {
         where: { trainerProfileId: trainer.id, status: 'open' },
         select: { traineeProfileId: true },
       }),
+      this.prisma.scheduleSession?.findMany
+        ? this.prisma.scheduleSession.findMany({
+            where: { trainerProfileId: trainer.id, status: { in: ['scheduled', 'in_progress', 'completed'] } },
+            select: { traineeProfileId: true },
+          })
+        : Promise.resolve([]),
     ]);
     const ownedIds = [
       ...new Set(
         [
           ...byRotation.map((r) => r.traineeProfileId),
           ...byAllocation.map((a) => a.traineeProfileId),
+          ...bySession.map((s) => s.traineeProfileId),
         ].filter((id): id is string => !!id),
       ),
     ];

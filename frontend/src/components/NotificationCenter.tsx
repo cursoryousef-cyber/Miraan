@@ -16,9 +16,10 @@ import {
 
 export const NotificationCenter: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { isAuthenticated, hasAnyRole } = useAuth();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const open = Boolean(anchorEl);
-  const hasToken = Boolean(localStorage.getItem('access_token'));
 
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
@@ -26,8 +27,8 @@ export const NotificationCenter: React.FC = () => {
       const res = await apiClient.get('/notifications/unread-count');
       return res.data?.data || { count: 0 };
     },
-    enabled: hasToken,
-    refetchInterval: (query) => (query.state.status === 'error' || !hasToken ? false : 30000),
+    enabled: isAuthenticated,
+    refetchInterval: (query) => (query.state.status === 'error' || !isAuthenticated ? false : 30000),
   });
 
   const { data: notificationsData, isLoading, error, refetch } = useQuery({
@@ -36,11 +37,9 @@ export const NotificationCenter: React.FC = () => {
       const res = await apiClient.get('/notifications', { params: { limit: 10 } });
       return res.data?.data || [];
     },
-    enabled: open && hasToken,
+    enabled: open && isAuthenticated,
   });
 
-  const navigate = useNavigate();
-  const { hasAnyRole } = useAuth();
   const isUniversity = hasAnyRole(['university_administrator', 'academic_affairs']);
   const isCluster = hasAnyRole(['cluster_manager', 'cluster_administrator', 'training_director']);
   const isHospital = hasAnyRole(['hospital_training_admin']);

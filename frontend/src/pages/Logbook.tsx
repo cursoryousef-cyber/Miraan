@@ -39,6 +39,7 @@ import {
   Tabs,
   Tab,
   Box,
+  Alert,
 } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
@@ -93,6 +94,9 @@ export const LogbookPage: React.FC = () => {
   const [signModalLogId, setSignModalLogId] = useState<string | null>(null);
   const [signFeedback, setSignFeedback] = useState('');
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
+  const [signSuccess, setSignSuccess] = useState<string | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
   // Evaluation state — trainer submits eval
@@ -357,14 +361,21 @@ export const LogbookPage: React.FC = () => {
   };
 
   const handleApprove = async (logId: string, signatureUrl?: string, feedback?: string) => {
+    setIsApproving(true);
+    setSignError(null);
     try {
       await apiClient.post(`/logbook/entries/${logId}/approve`, {
         feedback: feedback || 'تم التدقيق والاعتماد بنجاح والتوقيع رقمياً',
         signatureUrl,
       });
+      setSignSuccess('تم اعتماد السجل وتوقيعه بنجاح');
+      setSignModalLogId(null);
       refetchLogs();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error approving log entry:', err);
+      setSignError(err?.response?.data?.message || err?.message || 'تعذر اعتماد السجل، تأكد من صحة البيانات والصلاحيات');
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -447,6 +458,11 @@ export const LogbookPage: React.FC = () => {
           { label: 'تقييمات معلّقة', value: pendingEvalsData?.length ?? pendingEvalsData?.count ?? 0, icon: ClipboardCheck, tone: 'violet' },
         ]}
     >
+      {signSuccess && (
+        <Alert severity="success" onClose={() => setSignSuccess(null)} sx={{ my: 2 }}>
+          {signSuccess}
+        </Alert>
+      )}
 
       {/* Tabs Menu */}
       <Box style={{ borderBottom: 1, borderColor: '#E2E8F0' }}>
@@ -1197,9 +1213,20 @@ export const LogbookPage: React.FC = () => {
         </DialogActions>
       </Dialog>
       {/* Digital Signature Approval Dialog */}
-      <Dialog open={Boolean(signModalLogId)} onClose={() => setSignModalLogId(null)} maxWidth="xs" fullWidth>
-        <DialogTitle style={{ fontWeight: 800 }}>التوقيع الإلكتروني واعتمد الإجراء</DialogTitle>
+      <Dialog
+        open={Boolean(signModalLogId)}
+        onClose={() => { if (!isApproving) setSignModalLogId(null); }}
+        maxWidth="xs"
+        fullWidth
+        disableRestoreFocus
+      >
+        <DialogTitle style={{ fontWeight: 800 }}>التوقيع الإلكتروني واعتماد الإجراء</DialogTitle>
         <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '12px' }}>
+          {signError && (
+            <Alert severity="error" style={{ fontSize: '13px' }}>
+              {signError}
+            </Alert>
+          )}
           <div style={{ fontSize: '13px', color: '#64748B' }}>
             ارسم توقيعك الحي بالإصبع أو الماوس في المربع أدناه للاعتماد:
           </div>
@@ -1255,30 +1282,31 @@ export const LogbookPage: React.FC = () => {
               style={{ width: '100%', height: '140px', cursor: 'crosshair', touchAction: 'none' }}
             />
           </div>
-          <Button size="small" onClick={clearCanvas} style={{ color: '#64748B', alignSelf: 'flex-start' }}>
+          <Button size="small" onClick={clearCanvas} disabled={isApproving} style={{ color: '#64748B', alignSelf: 'flex-start' }}>
             إعادة المسح
           </Button>
           <TextField
             label="ملاحظات وتغذية راجعة (اختياري)"
             size="small"
             fullWidth
+            disabled={isApproving}
             value={signFeedback}
             onChange={(e) => setSignFeedback(e.target.value)}
           />
         </DialogContent>
         <DialogActions style={{ padding: '16px' }}>
-          <Button onClick={() => setSignModalLogId(null)}>إلغاء</Button>
+          <Button onClick={() => setSignModalLogId(null)} disabled={isApproving}>إلغاء</Button>
           <Button
             variant="contained"
+            disabled={isApproving}
             style={{ background: '#059669', fontWeight: 700 }}
             onClick={() => {
               if (!signModalLogId) return;
               const dataUrl = canvasRef.current?.toDataURL();
               handleApprove(signModalLogId, dataUrl, signFeedback);
-              setSignModalLogId(null);
             }}
           >
-            تأكيد التوقيع والاعتماد
+            {isApproving ? 'جارٍ الاعتماد والتوقيع...' : 'تأكيد التوقيع والاعتماد'}
           </Button>
         </DialogActions>
       </Dialog>

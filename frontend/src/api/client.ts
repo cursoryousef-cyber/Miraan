@@ -118,16 +118,18 @@ apiClient.interceptors.response.use(
           processQueue(refreshErr, null);
           isRefreshing = false;
 
+          window.dispatchEvent(new Event('auth:logout'));
           localStorage.clear();
-          if (window.location.pathname !== '/login') {
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/activate') {
             window.location.href = '/login';
           }
           return Promise.reject(refreshErr);
         }
       } else {
         isRefreshing = false;
+        window.dispatchEvent(new Event('auth:logout'));
         localStorage.clear();
-        if (window.location.pathname !== '/login') {
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/activate') {
           window.location.href = '/login';
         }
       }
