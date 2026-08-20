@@ -43,7 +43,7 @@ const HOSPITAL_ADMIN_ACTIONABLE = ['allocated', 'hospital_review', 'on_hold', 'h
 export const AcceptanceChain: React.FC = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const orgId = user?.activeOrganization?.id;
+  const orgId = user?.activeOrganization?.id || (user as any)?.organizationId;
 
   const [selectedRow, setSelectedRow] = useState<any | null>(null);
   const [view, setView] = useState<'cards' | 'table'>('table');
@@ -60,7 +60,7 @@ export const AcceptanceChain: React.FC = () => {
 
   const isHospitalTrainingAdmin = user?.roles?.includes('hospital_training_admin');
   const canReviewHospitalRequests = user?.roles?.some((r: string) =>
-    ['hospital_training_admin', 'cluster_manager', 'training_director', 'hospital_administrator', 'platform_owner', 'system_admin'].includes(r)
+    ['hospital_training_admin', 'cluster_manager', 'cluster_administrator', 'training_director', 'hospital_administrator', 'platform_owner', 'system_admin', 'org_manager'].includes(r)
   );
 
   const { data, isLoading, refetch } = useQuery({
@@ -93,7 +93,11 @@ export const AcceptanceChain: React.FC = () => {
 
   const departments: any[] = capacityData?.departments || [];
   const trainers: any[] = trainerCardsData || [];
-  const rows: any[] = data?.data || [];
+  const rows: any[] = useMemo(() => {
+    const actionable = Array.isArray(data?.data) ? data.data : [];
+    const pending = Array.isArray(data?.pendingUpstreamRows) ? data.pendingUpstreamRows : [];
+    return [...actionable, ...pending];
+  }, [data]);
 
   const startReviewMut = useMutation({
     mutationFn: (rowId: string) =>

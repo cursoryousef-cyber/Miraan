@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, CircularProgress } from '@mui/material';
 import {
-  BookOpen, CalendarCheck, CheckSquare, ClipboardCheck, GraduationCap,
-  Stethoscope, Users, CreditCard, Zap, Clock, PhoneCall
+  BookOpen, CalendarCheck, CalendarDays, CheckSquare, ClipboardCheck, FileText, GraduationCap,
+  Megaphone, Stethoscope, Users, CreditCard, Zap, Clock, PhoneCall
 } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -436,8 +436,11 @@ export const TraineeDashboard: React.FC = () => {
       <Panel title="الإجراءات السريعة والخدمات اليومية" icon={Zap} tone="primary">
         <QuickActions
           items={[
-            { label: 'سجل التدريب والحالات Logbook', icon: BookOpen, onClick: () => navigate('/logbook'), tone: 'primary', hint: 'عرض المهارات والحالات السريرية' },
-            { label: 'الملف الشخصي والبطاقة', icon: CreditCard, onClick: () => navigate('/profile'), tone: 'info', hint: 'عرض البطاقة الرقمية' },
+            { label: 'جدول المناوبات والدوام', icon: CalendarDays, onClick: () => navigate('/schedules'), tone: 'primary', hint: 'متابعة مناوبات الروتيشن' },
+            { label: 'سجل التدريب والحالات Logbook', icon: BookOpen, onClick: () => navigate('/logbook'), tone: 'success', hint: 'عرض وتوثيق الحالات السريرية' },
+            { label: 'الفعاليات وورش العمل', icon: Megaphone, onClick: () => navigate('/my-training-events'), tone: 'info', hint: 'الفعاليات الموجهة إليك' },
+            { label: 'الإقرارات والمستندات', icon: FileText, onClick: () => navigate('/declarations'), tone: 'warning', hint: 'متابعة الإقرارات التدريبية' },
+            { label: 'الملف الشخصي والبطاقة', icon: CreditCard, onClick: () => navigate('/profile'), tone: 'neutral', hint: 'عرض البطاقة الرقمية' },
             { label: 'نداءات المدرب M-CALL', icon: PhoneCall, onClick: () => navigate('/calls'), tone: 'danger', hint: 'الرد على نداءات مدربك' },
           ]}
         />
