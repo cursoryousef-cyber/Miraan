@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   CheckCircle2, XCircle, ArrowRightLeft, RefreshCw, Clock3, Inbox,
   FileText, ShieldCheck, UserCheck, AlertTriangle, Eye, Search, Filter, Layers,
-  PlayCircle, PauseCircle, Edit3,
+  PlayCircle, PauseCircle, Edit3, Activity,
 } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -211,18 +211,69 @@ export const AcceptanceChain: React.FC = () => {
         `${r.nameAr ?? ''} ${r.nationalId ?? ''} ${req?.requestNumber ?? ''} ${r.specialty ?? ''}`.includes(needle);
       const matchesStatus =
         statusFilter === 'all' ||
-        (statusFilter === 'pending' && ['allocated', 'submitted', 'cluster_approved', 'hospital_review'].includes(r.status)) ||
+        // بانتظار البدء أو الاستئناف: submitted / cluster_approved / allocated / on_hold (إيقاف مؤقت)
+        (statusFilter === 'waiting' && ['submitted', 'cluster_approved', 'allocated', 'on_hold'].includes(r.status)) ||
+        // قيد مراجعة المستشفى فعليًا — hospital_review فقط
+        (statusFilter === 'review' && r.status === 'hospital_review') ||
+        // موقوف مؤقتًا (فلتر مستقل للدقة)
+        (statusFilter === 'on_hold' && r.status === 'on_hold') ||
+        // تم إسناد قسم أو مدرب
         (statusFilter === 'assigned' && Boolean(r.assignedDepartmentId || r.assignedTrainerProfileId)) ||
-        (statusFilter === 'accepted' && ['accepted', 'active', 'hospital_accepted'].includes(r.status)) ||
+        // مقبول بالمستشفى رسميًا — hospital_accepted فقط
+        (statusFilter === 'hospital_accepted' && r.status === 'hospital_accepted') ||
+        // نشط ومسجل بالتدريب السريري
+        (statusFilter === 'active' && r.status === 'active') ||
+        // مرفوض أو مُعاد للتجمع
         (statusFilter === 'rejected' && ['rejected', 'returned', 'hospital_returned_to_cluster'].includes(r.status));
       return matchesSearch && matchesStatus;
     });
   }, [rows, search, statusFilter]);
 
-  const pendingCount = rows.filter((r: any) => ['allocated', 'submitted', 'cluster_approved', 'hospital_review'].includes(r.status)).length;
-  const assignedCount = rows.filter((r: any) => Boolean(r.assignedDepartmentId || r.assignedTrainerProfileId)).length;
-  const acceptedCount = rows.filter((r: any) => ['accepted', 'active', 'hospital_accepted'].includes(r.status)).length;
-  const rejectedCount = rows.filter((r: any) => ['rejected', 'returned', 'hospital_returned_to_cluster'].includes(r.status)).length;
+  // KPIs — derived strictly from TRAINING_REQUEST_TRAINEE_TRANSITIONS state machine
+  // and TRAINEE_ROW_STATUS constants. No legacy/unknown status is included.
+  //
+  // Transition chain (TrainingRequestTrainee):
+  //   cluster_approved → allocated
+  //     allocated → hospital_review  (startHospitalReview)
+  //     allocated → on_hold          (putOnHold — pause before review starts)
+  //   hospital_review → hospital_accepted  (hospitalAcceptIntern)
+  //   hospital_review → on_hold            (putOnHold — pause mid-review)
+  //   hospital_review → hospital_returned_to_cluster
+  //   hospital_review → rejected
+  //   on_hold → hospital_review            (resumeFromHold — NOT a separate stage)
+  //   on_hold → hospital_returned_to_cluster
+  //   hospital_accepted → active           (activateOneRow)
+  //   hospital_accepted → hospital_returned_to_cluster
+  //   hospital_accepted → rejected
+  //   active → graduated
+  //
+  // on_hold semantics: إيقاف مؤقت — NOT an active review. It is a pause that can
+  // come from either allocated or hospital_review. The row is waiting to resume.
+  // It belongs in the "waiting" bucket alongside allocated/submitted/cluster_approved.
+  //
+  // 'accepted' is NOT in TRAINEE_ROW_STATUS and NOT in the transition table.
+  // It appears only as a legacy note in HOSPITAL_ACTIONABLE_STATUSES.ts — never
+  // written by any current service method. Not used here.
+  //
+  // waitingCount        = موزع على المستشفى ولم تبدأ/تستأنف مراجعته بعد
+  //                       (submitted, cluster_approved, allocated, on_hold)
+  // reviewCount         = قيد مراجعة المستشفى فعليًا الآن (hospital_review)
+  // assignedCount       = تم إسناد قسم أو مدرب (بصرف النظر عن الحالة)
+  // hospitalAcceptedCount = قبله المستشفى رسميًا (hospital_accepted فقط)
+  // activeTrainingCount = نشط ومسجل بالتدريب السريري الفعلي (active فقط)
+  // rejectedCount       = مرفوض أو مُعاد للتجمع
+  const waitingCount          = rows.filter((r: any) =>
+    ['submitted', 'cluster_approved', 'allocated', 'on_hold'].includes(r.status)
+  ).length;
+  const reviewCount           = rows.filter((r: any) => r.status === 'hospital_review').length;
+  const assignedCount         = rows.filter((r: any) =>
+    Boolean(r.assignedDepartmentId || r.assignedTrainerProfileId)
+  ).length;
+  const hospitalAcceptedCount = rows.filter((r: any) => r.status === 'hospital_accepted').length;
+  const activeTrainingCount   = rows.filter((r: any) => r.status === 'active').length;
+  const rejectedCount         = rows.filter((r: any) =>
+    ['rejected', 'returned', 'hospital_returned_to_cluster'].includes(r.status)
+  ).length;
 
   const renderActionButtons = (row: any) => {
     if (!isHospitalTrainingAdmin) return null;
@@ -292,10 +343,12 @@ export const AcceptanceChain: React.FC = () => {
         </Tooltip>
       }
       stats={[
-        { label: 'إجمالي الطلبات المسجلة', value: rows.length, icon: Layers, tone: 'primary' },
-        { label: 'بانتظار المراجعة', value: pendingCount, icon: Clock3, tone: pendingCount ? 'warning' : 'success' },
-        { label: 'تم التوزيع (قسم/مدرب)', value: assignedCount, icon: UserCheck, tone: 'info' },
-        { label: 'مقبولون ومسجلون', value: acceptedCount, icon: CheckCircle2, tone: 'success' },
+        { label: 'إجمالي المرشحين', value: rows.length, icon: Layers, tone: 'primary' },
+        { label: 'بانتظار بدء المراجعة', value: waitingCount, icon: Clock3, tone: waitingCount ? 'warning' : 'neutral' },
+        { label: 'قيد مراجعة المستشفى', value: reviewCount, icon: AlertTriangle, tone: reviewCount ? 'warning' : 'neutral' },
+        { label: 'تم إسناد قسم/مدرب', value: assignedCount, icon: UserCheck, tone: 'info' },
+        { label: 'مقبول بالمستشفى', value: hospitalAcceptedCount, icon: CheckCircle2, tone: hospitalAcceptedCount ? 'success' : 'neutral' },
+        { label: 'نشط ومسجل بالتدريب', value: activeTrainingCount, icon: Activity, tone: activeTrainingCount ? 'success' : 'neutral' },
         { label: 'مرفوضون / مُعادون', value: rejectedCount, icon: XCircle, tone: rejectedCount ? 'danger' : 'neutral' },
       ]}
       toolbar={
@@ -307,9 +360,12 @@ export const AcceptanceChain: React.FC = () => {
           <TextField size="small" select label="تصفية حسب مرحلة التوزيع"
             value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} sx={{ minWidth: 200 }}>
             <MenuItem value="all">جميع المراحل والحالات</MenuItem>
-            <MenuItem value="pending">بانتظار مراجعة المستشفى</MenuItem>
-            <MenuItem value="assigned">موزَّع على قسم أو مدرب</MenuItem>
-            <MenuItem value="accepted">مقبول ومستلم نهائياً</MenuItem>
+            <MenuItem value="waiting">بانتظار بدء المراجعة (موزع / موقوف)</MenuItem>
+            <MenuItem value="review">قيد مراجعة المستشفى</MenuItem>
+            <MenuItem value="on_hold">موقوف مؤقتًا</MenuItem>
+            <MenuItem value="assigned">تم إسناد قسم أو مدرب</MenuItem>
+            <MenuItem value="hospital_accepted">مقبول بالمستشفى</MenuItem>
+            <MenuItem value="active">نشط ومسجل بالتدريب</MenuItem>
             <MenuItem value="rejected">مرفوض أو مُعاد للتجمع</MenuItem>
           </TextField>
           <ViewToggle value={view} onChange={setView} />
