@@ -110,13 +110,25 @@ export class UserAccountsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'تحديث بيانات حساب الدخول' })
+  // No PermissionsGuard decorator here by design: this endpoint serves two
+  // distinct callers — (a) any user updating their OWN profile, and (b)
+  // an administrator with manage_users updating another account.  The guard
+  // cannot express this OR logic; the inline check below is the real
+  // enforcement gate.  JwtAuthGuard (class-level) still ensures an
+  // authenticated session is required.
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateUserAccountDto,
     @CurrentUser() user: IAuthenticatedUser,
   ) {
     const isSelf = user?.accountId === id;
-    const canManage = user?.roles?.some((r) => ['platform_owner', 'cluster_manager', 'hospital_training_admin', 'system_admin'].includes(r)) || user?.permissions?.includes('manage_users');
+    // Only allow explicit manage_users permission holders to update other
+    // accounts.  Previously this check included hardcoded role names
+    // (hospital_training_admin etc.), which is fragile and too broad.
+    const canManage =
+      user?.roles?.includes('platform_owner') ||
+      user?.roles?.includes('system_admin') ||
+      user?.permissions?.includes('manage_users');
     if (!isSelf && !canManage) {
       throw new ForbiddenException('ليس لديك الصلاحية لتحديث بيانات هذا الحساب');
     }

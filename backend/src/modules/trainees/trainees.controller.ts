@@ -2,16 +2,21 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Param,
   Body,
   UseGuards,
   Query,
   ConflictException,
   GoneException,
   BadRequestException,
+  NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { AdminChangeTraineePasswordDto } from './dto/admin-change-trainee-password.dto';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { CurrentUser, Public, RequireRoles } from '../../common/decorators';
 import { IAuthenticatedUser } from '../../common/interfaces';
@@ -602,7 +607,26 @@ export class TraineesController {
     const trainees = await this.prisma.traineeProfile.findMany({
       where: whereClause,
       include: {
-        person: true,
+        person: {
+          include: {
+            userAccounts: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                isActive: true,
+                isEmailVerified: true,
+                activatedAt: true,
+                activationToken: true,
+                activationTokenExpiresAt: true,
+                lastLoginAt: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
         organization: true,
         sponsorOrganization: true,
         program: true,
@@ -780,8 +804,149 @@ export class TraineesController {
     // المشرف الأكاديمي ومدير الجهة — يرون الكل في جهتهم
     const trainees = await this.prisma.traineeProfile.findMany({
       where: { organizationId: user.organizationId },
-      include: { person: true, organization: true, program: true },
+      include: {
+        person: {
+          include: {
+            userAccounts: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                isActive: true,
+                isEmailVerified: true,
+                activatedAt: true,
+                activationToken: true,
+                activationTokenExpiresAt: true,
+                lastLoginAt: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
+        organization: true,
+        program: true,
+      },
     });
     return { data: trainees };
+  }
+
+  // ─── تعديل كلمة مرور المتدرب إدارياً ─────────────────────────────────────
+  /**
+   * Administrative password reset for a trainee account.
+   * Resolves the UserAccount strictly via TraineeProfile/Person identity (personId).
+   * Updates ONLY passwordHash and records a sanitized AuditLog.
+   */
+  @Patch(':id/password')
+  @RequireRoles(
+    'platform_owner',
+    'system_admin',
+    'cluster_manager',
+    'cluster_administrator',
+    'training_director',
+    'hospital_training_admin',
+    'org_manager',
+  )
+  @ApiOperation({ summary: 'تعديل كلمة مرور المتدرب إدارياً' })
+  async changeTraineePassword(
+    @Param('id') id: string,
+    @Body() dto: AdminChangeTraineePasswordDto,
+    @CurrentUser() user: IAuthenticatedUser,
+  ) {
+    if (!dto?.password || dto.password.trim().length < 8) {
+      throw new BadRequestException('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+    }
+
+    const scope = await this.scopeContext.resolve(user);
+
+    // 1. Find trainee profile or person
+    let profile = await this.prisma.traineeProfile.findUnique({
+      where: { id },
+      include: {
+        person: true,
+        organization: true,
+        sponsorOrganization: true,
+      },
+    });
+
+    let personId: string;
+    let nationalId: string | null = null;
+    if (profile) {
+      personId = profile.personId;
+      nationalId = profile.person?.nationalId ?? null;
+    } else {
+      const person = await this.prisma.person.findFirst({
+        where: { OR: [{ id }, { nationalId: id }] },
+        include: {
+          traineeProfile: {
+            include: { organization: true, sponsorOrganization: true, person: true },
+          },
+        },
+      });
+      if (!person) {
+        throw new NotFoundException('لم يتم العثور على المتدرب');
+      }
+      personId = person.id;
+      nationalId = person.nationalId ?? null;
+      profile = person.traineeProfile ?? null;
+    }
+
+    // 2. Enforce scope isolation
+    if (scope.visibleOrgIds !== null && profile) {
+      const orgIds = [profile.organizationId, profile.sponsorOrganizationId].filter(Boolean) as string[];
+      const isVisible = orgIds.some((orgId) => scope.visibleOrgIds!.includes(orgId));
+      if (!isVisible && !user?.roles?.includes('platform_owner') && !user?.roles?.includes('system_admin')) {
+        throw new ForbiddenException('هذا المتدرب خارج نطاق صلاحياتك التنظيمية');
+      }
+    }
+
+    // 3. Find active UserAccount for this Person
+    const account = await this.prisma.userAccount.findFirst({
+      where: { personId, deletedAt: null },
+    });
+
+    if (!account) {
+      throw new NotFoundException('لا يوجد حساب مستخدم مسجل لهذا المتدرب');
+    }
+
+    // 4. Hash password with bcrypt (10 rounds)
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    // 5. Update ONLY passwordHash & updatedById — preserve all other account fields
+    await this.prisma.userAccount.update({
+      where: { id: account.id },
+      data: {
+        passwordHash,
+        updatedById: user?.accountId,
+      },
+    });
+
+    // 6. Record AuditLog without password, hash, or tokens
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: user?.organizationId || profile?.organizationId || null,
+        actorId: user?.accountId,
+        action: 'trainee_password_reset',
+        entityType: 'UserAccount',
+        entityId: account.id,
+        newValues: {
+          traineeProfileId: profile?.id,
+          personId,
+          nationalId: profile?.person?.nationalId,
+          description: 'Administrator changed trainee password',
+        },
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم تغيير كلمة المرور بنجاح',
+      data: {
+        accountId: account.id,
+        traineeProfileId: profile?.id,
+        updatedAt: new Date(),
+      },
+    };
   }
 }
