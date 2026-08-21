@@ -281,12 +281,10 @@ describe('Trainee Administrative Password Change Suite (14 Tests)', () => {
     expect(store.organizationAssignments).toEqual(assignmentsBefore);
   });
 
-  // 11. ActivationToken remains unchanged for an unactivated account
-  it('11. activationToken and activationTokenExpiresAt remain intact for unactivated account', async () => {
-    const accountBefore = store.userAccounts.get(ACCOUNT_ID);
-    const origToken = accountBefore.activationToken;
-    const origExpires = accountBefore.activationTokenExpiresAt;
-
+  // 11. Admin-set password clears any pending activation token so the account
+  // is immediately usable without an activation link (no dangling token that
+  // could still be redeemed later).
+  it('11. activationToken and activationTokenExpiresAt are cleared for a previously unactivated account', async () => {
     await controller.changeTraineePassword(
       PROFILE_ID,
       { password: 'NewSecurePassword!2026' },
@@ -294,12 +292,13 @@ describe('Trainee Administrative Password Change Suite (14 Tests)', () => {
     );
 
     const accountAfter = store.userAccounts.get(ACCOUNT_ID);
-    expect(accountAfter.activationToken).toBe(origToken);
-    expect(accountAfter.activationTokenExpiresAt).toEqual(origExpires);
+    expect(accountAfter.activationToken).toBeNull();
+    expect(accountAfter.activationTokenExpiresAt).toBeNull();
   });
 
-  // 12. activatedAt remains unchanged
-  it('12. activatedAt remains unchanged (null for unactivated, preserved for active)', async () => {
+  // 12. activatedAt is set so the trainee can log in with the new password
+  // right away, per the "manager sets password directly" flow.
+  it('12. activatedAt is set (was null) so the account can log in immediately', async () => {
     await controller.changeTraineePassword(
       PROFILE_ID,
       { password: 'NewSecurePassword!2026' },
@@ -307,7 +306,7 @@ describe('Trainee Administrative Password Change Suite (14 Tests)', () => {
     );
 
     const account = store.userAccounts.get(ACCOUNT_ID);
-    expect(account.activatedAt).toBeNull();
+    expect(account.activatedAt).not.toBeNull();
   });
 
   // 13. Password/hash is never written to AuditLog

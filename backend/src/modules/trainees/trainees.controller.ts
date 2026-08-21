@@ -913,12 +913,19 @@ export class TraineesController {
     // 4. Hash password with bcrypt (10 rounds)
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    // 5. Update ONLY passwordHash & updatedById — preserve all other account fields
+    // 5. Update passwordHash & updatedById, and clear any pending activation —
+    // the admin is setting the password directly, so the account must be usable
+    // for login immediately, not gated behind an activation link the trainee
+    // never receives.
     await this.prisma.userAccount.update({
       where: { id: account.id },
       data: {
         passwordHash,
         updatedById: user?.accountId,
+        activationToken: null,
+        activationTokenExpiresAt: null,
+        isEmailVerified: true,
+        activatedAt: account.activatedAt ?? new Date(),
       },
     });
 
