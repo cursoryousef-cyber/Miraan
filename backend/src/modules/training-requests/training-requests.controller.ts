@@ -17,6 +17,7 @@ import { TraineeAllocationService } from './trainee-allocation.service';
 import { TrainingRequestTraineesService } from './training-request-trainees.service';
 import { GraduationService } from './graduation.service';
 import { RequestCompositionService } from './request-composition.service';
+import { ArarSyncService } from './arar-sync.service';
 import {
   CreateTrainingRequestDto,
   PreviewTrainingRequestDto,
@@ -69,7 +70,17 @@ export class TrainingRequestsController {
     private graduationService: GraduationService,
     private compositionService: RequestCompositionService,
     private allocationService: TraineeAllocationService,
+    private ararSyncService: ArarSyncService,
   ) {}
+
+  @Post('admin/sync-arar-dataset')
+  @RequireRoles('platform_owner', 'cluster_administrator')
+  @ApiOperation({
+    summary: 'مزامنة بيانات مستشفى عرعر المركزي التشغيلية وسلسلة القبول',
+  })
+  async syncArarDataset() {
+    return this.ararSyncService.syncArarDataset();
+  }
 
   // ─── University request composition (Module 5) ──────────────────────────────
   // Declared before the parameterised routes so the literal segments are not

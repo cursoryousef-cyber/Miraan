@@ -15,6 +15,8 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { TrainingPlansModule } from '../training-plans/training-plans.module';
 import { TimelineModule } from '../timeline/timeline.module';
 
+import { ArarSyncService } from './arar-sync.service';
+
 @Module({
   imports: [PrismaModule, NotificationsModule, OrganizationsModule, TrainingPlansModule, TimelineModule],
   controllers: [TrainingRequestsController],
@@ -28,6 +30,7 @@ import { TimelineModule } from '../timeline/timeline.module';
     GraduationService,
     RequestCompositionService,
     TraineeAccountProvisioningService,
+    ArarSyncService,
   ],
   exports: [
     TraineeAllocationService,
@@ -39,6 +42,7 @@ import { TimelineModule } from '../timeline/timeline.module';
     GraduationService,
     RequestCompositionService,
     TraineeAccountProvisioningService,
+    ArarSyncService,
   ],
 })
 export class TrainingRequestsModule {}
