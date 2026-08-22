@@ -143,6 +143,12 @@ export const Affiliations: React.FC = () => {
       setReqEndDate(calculateEndDate(val, num));
     }
   };
+  // Same department set as before, but durationWeeks is a placeholder — the
+  // effect below rescales it to match the actual training period the moment
+  // dates are known, so it never ships a stale total (e.g. the old fixed
+  // 6×8=48 default submitted against a 26-week period, which the backend's
+  // own weeksBetween/tolerance check in request-composition.service.ts
+  // rightfully rejects).
   const [reqRotations, setReqRotations] = useState<Array<{ departmentNameAr: string; durationWeeks: number }>>([
     { departmentNameAr: 'الباطنة العامة', durationWeeks: 8 },
     { departmentNameAr: 'الأطفال', durationWeeks: 8 },
@@ -151,6 +157,35 @@ export const Affiliations: React.FC = () => {
     { departmentNameAr: 'الطوارئ', durationWeeks: 8 },
     { departmentNameAr: 'طب الأسرة / اختيارية', durationWeeks: 8 },
   ]);
+
+  // Mirrors backend's request-composition.service.ts weeksBetween exactly
+  // (round of whole-day difference / 7) so the number shown here is the same
+  // number the backend will validate against.
+  const weeksBetween = (startStr: string, endStr: string): number => {
+    if (!startStr || !endStr) return 0;
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+    return Math.round((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  };
+
+  const periodWeeks = weeksBetween(reqStartDate, reqEndDate);
+  const rotationsTotalWeeks = reqRotations.reduce((sum, r) => sum + (Number(r.durationWeeks) || 0), 0);
+  const rotationsMatchPeriod = periodWeeks > 0 && rotationsTotalWeeks === periodWeeks;
+
+  // Auto-distributes the fixed department list across the actual training
+  // period whenever it changes, so the rotations sent with the request always
+  // sum to exactly the selected period — never a leftover 48-week default.
+  useEffect(() => {
+    if (periodWeeks < reqRotations.length) return; // too short to give every rotation a whole week — leave as-is, submit stays blocked by the mismatch guard below
+    const count = reqRotations.length;
+    const base = Math.floor(periodWeeks / count);
+    const remainder = periodWeeks - base * count;
+    setReqRotations((prev) =>
+      prev.map((r, i) => ({ ...r, durationWeeks: base + (i < remainder ? 1 : 0) })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodWeeks]);
   const [reqTrainees, setReqTrainees] = useState<Array<{
     academicNumber: string;
     nationalId: string;
@@ -991,21 +1026,25 @@ export const Affiliations: React.FC = () => {
         </Alert>
       )}
 
-      <Paper className="glass-card" style={{ marginBottom: '16px', padding: '4px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+      <Paper className="glass-card" style={{ marginBottom: '16px', padding: '6px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
         <Tabs
           value={activeTab}
           onChange={(_, val) => setSearchParams({ tab: val })}
           indicatorColor="primary"
           textColor="primary"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{
-            '& .MuiTab-root': { fontWeight: 700, fontSize: '14px', minHeight: '48px' },
+            minHeight: '40px',
+            '& .MuiTab-root': { fontWeight: 700, fontSize: '13px', minHeight: '40px', px: 1.5 },
           }}
         >
-          <Tab value="incoming" label={`📥 الطلبات الواردة من الجامعات (${pendingDistributionCount + pendingApprovalCount})`} />
-          <Tab value="sent" label={`📤 الطلبات المرسلة للمستشفيات (${sentHospitalsCount})`} />
+          <Tab value="incoming" label={`📥 الواردة (${pendingDistributionCount + pendingApprovalCount})`} />
+          <Tab value="sent" label={`📤 المرسلة للمستشفيات (${sentHospitalsCount})`} />
         </Tabs>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', flex: '1 1 auto', justifyContent: 'flex-end' }}>
           <TextField
             size="small"
             placeholder="بحث برقم الطلب، الجامعة، البرنامج..."
@@ -1014,9 +1053,9 @@ export const Affiliations: React.FC = () => {
             InputProps={{
               startAdornment: <Search size={16} style={{ marginLeft: '8px', color: '#64748B' }} />,
             }}
-            style={{ width: '240px' }}
+            sx={{ minWidth: { xs: '100%', sm: 200 }, flex: '1 1 auto' }}
           />
-          <FormControl size="small" style={{ minWidth: '140px' }}>
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 140 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
             <Select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -1037,7 +1076,7 @@ export const Affiliations: React.FC = () => {
         </div>
       </Paper>
 
-      <TableContainer component={Paper} className="glass-card">
+      <TableContainer component={Paper} className="glass-card table-scroll" sx={{ width: '100%', overflowX: 'auto' }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -1557,6 +1596,22 @@ export const Affiliations: React.FC = () => {
               fullWidth
             />
           </div>
+
+          {/* Rotations-vs-period summary — must match exactly before submit is
+              allowed; the backend rejects any mismatch beyond a small tolerance. */}
+          <Alert severity={rotationsMatchPeriod ? 'success' : 'error'} style={{ fontSize: '13px' }}>
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontWeight: 700 }}>
+              <span>فترة التدريب: {periodWeeks} أسبوع</span>
+              <span>مجموع الروتيشنات: {rotationsTotalWeeks} أسبوع</span>
+              <span>الفرق: {Math.abs(periodWeeks - rotationsTotalWeeks)} أسبوع</span>
+            </div>
+            {!rotationsMatchPeriod && (
+              <div style={{ marginTop: '4px' }}>
+                مجموع مدد الروتيشنات لا يطابق فترة التدريب المحددة — لا يمكن إرسال الطلب حتى يتطابق المجموعان.
+              </div>
+            )}
+          </Alert>
+
           {/* Roster — the Excel entry point the sponsor submits its trainees with.
               Rows parsed here go out with the request and are written by the same
               validated import path as POST /training-requests/:id/trainees/import. */}
@@ -1649,7 +1704,8 @@ export const Affiliations: React.FC = () => {
               !reqProgramId ||
               reqTrainees.length === 0 ||
               !reqDurationMonths ||
-              Number(reqDurationMonths) < 1
+              Number(reqDurationMonths) < 1 ||
+              !rotationsMatchPeriod
             }
             style={{ background: '#059669', fontWeight: 700 }}
           >

@@ -152,7 +152,7 @@ const HOSPITAL_TRAINING_NAV: NavSection[] = [
         requires: ['trainee.view.hospital'],
       },
       {
-        name: 'المتدربون والتوزيع', path: '/hospital?tab=trainers', icon: UsersRound,
+        name: 'المتدربون والتوزيع', path: '/hospital?tab=trainees', icon: UsersRound,
         requires: ['trainee.view.hospital'],
       },
     ],

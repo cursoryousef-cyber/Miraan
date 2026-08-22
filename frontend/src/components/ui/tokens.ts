@@ -12,27 +12,28 @@ export const space = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 20,
-  '2xl': 24,
-  '3xl': 32,
+  xl: 18,
+  '2xl': 20,
+  '3xl': 28,
 } as const;
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
+  sm: 6,
+  md: 10,
+  lg: 14,
+  pill: 999,
 } as const;
 
-/** Fixed type scale — no ad-hoc font sizes in pages. */
+/** Compact type scale — balanced readability without ballooning. */
 export const font = {
-  pageTitle: 24,
-  sectionTitle: 16,
-  cardTitle: 14,
-  body: 13.5,
-  label: 12.5,
-  caption: 11.5,
-  kpi: 30,
-  kpiSm: 24,
+  pageTitle: 22,
+  sectionTitle: 15,
+  cardTitle: 13.5,
+  body: 13,
+  label: 12,
+  caption: 11,
+  kpi: 24,
+  kpiSm: 18,
 } as const;
 
 export const colour = {

@@ -939,7 +939,7 @@ export const LogbookPage: React.FC = () => {
                 <TextField label="تعليق (إلزامي إذا كانت الدرجة أقل من 60)" size="small" fullWidth multiline rows={3}
                   inputProps={{ id: 'trainer-eval-comments' }}
                   sx={{ mb: 2, '& label': { color: '#64748B' }, '& textarea': { color: '#0F172A' } }} />
-                <FormControl size="small" sx={{ mb: 2, minWidth: 220 }}>
+                <FormControl size="small" sx={{ mb: 2, minWidth: { xs: '100%', sm: 220 } }}>
                   <InputLabel sx={{ color: '#64748B' }}>نموذج التقييم</InputLabel>
                   <Select defaultValue="" inputProps={{ id: 'trainer-eval-form-id' }}
                     sx={{ color: '#0F172A', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' } }}>
@@ -988,7 +988,7 @@ export const LogbookPage: React.FC = () => {
                   الاجتماع إلزامي ولا يُفتح التقييم النهائي إن لم يُنفَّذ.
                 </p>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  <FormControl size="small" required error={!midpointRotationId} sx={{ minWidth: 220 }}>
+                  <FormControl size="small" required error={!midpointRotationId} sx={{ minWidth: { xs: '100%', sm: 220 } }}>
                     <InputLabel sx={{ color: '#64748B' }}>المتدرب / الروتيشن النشط</InputLabel>
                     <Select
                       value={midpointRotationId}

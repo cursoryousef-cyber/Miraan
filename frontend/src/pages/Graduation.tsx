@@ -169,7 +169,7 @@ export const Graduation: React.FC = () => {
           </CardGrid>
         )
       ) : (
-      <TableContainer component={Paper} className="glass-card">
+      <TableContainer component={Paper} className="glass-card table-scroll" sx={{ width: '100%', overflowX: 'auto' }}>
         <Table>
           <TableHead>
             <TableRow>

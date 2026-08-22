@@ -332,7 +332,7 @@ export const AcceptanceChain: React.FC = () => {
 
   return (
     <DataPageShell
-      title="سلسلة القبول ومتابعة مسار الطلبات (Acceptance Chain & Request Progress)"
+      title="سلسلة القبول ومتابعة مسار الطلبات"
       subtitle={`${user?.activeOrganization?.nameAr ?? 'المستشفى'} — متابعة مباشرة وحية لتقدم طلبات التدريب المحالة من التجمع الصحي`}
       loading={isLoading}
       actions={
@@ -356,9 +356,10 @@ export const AcceptanceChain: React.FC = () => {
           <TextField size="small" placeholder="بحث باسم المتدرب، الرقم الوظيفي، أو رقم الطلب..."
             value={search} onChange={(e) => setSearch(e.target.value)}
             InputProps={{ startAdornment: <Search size={16} style={{ marginLeft: 8, color: '#64748B' }} /> }}
-            sx={{ minWidth: 260 }} />
+            sx={{ minWidth: { xs: '100%', sm: 220 }, flex: '1 1 auto' }} />
           <TextField size="small" select label="تصفية حسب مرحلة التوزيع"
-            value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} sx={{ minWidth: 200 }}>
+            value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            sx={{ minWidth: { xs: '100%', sm: 180 }, flex: '1 1 auto' }}>
             <MenuItem value="all">جميع المراحل والحالات</MenuItem>
             <MenuItem value="waiting">بانتظار بدء المراجعة (موزع / موقوف)</MenuItem>
             <MenuItem value="review">قيد مراجعة المستشفى</MenuItem>
@@ -381,7 +382,7 @@ export const AcceptanceChain: React.FC = () => {
             hint="يظهر هنا مسار وتقدم الطلبات المحالة من التجمع الصحي تلقائياً." />
         </Paper>
       ) : view === 'cards' ? (
-        <CardGrid min={350}>
+        <CardGrid min={280}>
           {filteredRows.map((row: any) => {
             const st = STATUS_LABELS[row.status] || { label: row.status, color: 'default' as const, stepIndex: 1 };
             const req = row.trainingRequest;
@@ -434,14 +435,13 @@ export const AcceptanceChain: React.FC = () => {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell style={{ fontWeight: 700, color: '#475569' }}>المتدرب / التخصص</TableCell>
-                <TableCell style={{ fontWeight: 700, color: '#475569' }}>الجهة والتاريخ</TableCell>
-                <TableCell style={{ fontWeight: 700, color: '#475569' }}>فترة التدريب</TableCell>
-                <TableCell style={{ fontWeight: 700, color: '#475569' }}>القسم والمدرب المخصصين</TableCell>
-                <TableCell style={{ fontWeight: 700, color: '#475569' }}>الحالة في سلسلة القبول</TableCell>
-                <TableCell style={{ fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-                  {isHospitalTrainingAdmin ? 'الإجراءات' : 'متابعة المسار'}
-                </TableCell>
+                <TableCell>المتدرب</TableCell>
+                <TableCell>الجهة المرسلة</TableCell>
+                <TableCell>التخصص</TableCell>
+                <TableCell>القسم المسند</TableCell>
+                <TableCell>المدرب المسند</TableCell>
+                <TableCell>الحالة في السلسلة</TableCell>
+                <TableCell align="center">الإجراءات</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -450,60 +450,24 @@ export const AcceptanceChain: React.FC = () => {
                 const req = row.trainingRequest;
                 const specialtyName = row.specialty || req?.specialtyAr || req?.specialtyEn || 'غير محدد';
                 const sourceOrgName = req?.sourceOrg?.nameAr || 'التجمع الصحي';
-                const start = row.startDate || req?.trainingStartDate || req?.startDate;
-                const end = row.endDate || req?.trainingEndDate || req?.endDate;
-                const periodText = start && end ? `${String(start).slice(0, 10)} → ${String(end).slice(0, 10)}` : 'غير محددة';
-                const requestDateText = req?.createdAt ? String(req.createdAt).slice(0, 10) : '—';
-                const canAct = isHospitalTrainingAdmin && HOSPITAL_ADMIN_ACTIONABLE.includes(row.status);
                 return (
                   <TableRow key={row.id} hover>
                     <TableCell>
-                      <Typography fontWeight={700} variant="body2">{row.nameAr}</Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace' }}>{row.nationalId || '—'}</Typography>
-                      <Chip size="small" label={specialtyName} color="success" variant="outlined" sx={{ mt: 0.5, fontSize: 11 }} />
+                      <Typography variant="body2" fontWeight={700}>{row.nameAr}</Typography>
+                      <Typography variant="caption" color="text.secondary">هوية: {row.nationalId || '—'}</Typography>
                     </TableCell>
+                    <TableCell>{sourceOrgName}</TableCell>
+                    <TableCell>{specialtyName}</TableCell>
+                    <TableCell>{row.assignedDepartment?.nameAr || '—'}</TableCell>
+                    <TableCell>{row.assignedTrainer?.person?.nameAr || '—'}</TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={600} style={{ color: '#0891B2' }}>{sourceOrgName}</Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>رقم الطلب: {req?.requestNumber || '—'}</Typography>
-                      <Typography variant="caption" color="text.secondary">تاريخ الطلب: {requestDateText}</Typography>
+                      <Chip size="small" label={st.label} color={st.color} sx={{ fontWeight: 700 }} />
                     </TableCell>
-                    <TableCell style={{ fontSize: '12px' }}><Typography variant="body2">{periodText}</Typography></TableCell>
-                    <TableCell style={{ fontSize: '12px' }}>
-                      <Typography variant="body2" fontWeight={700} style={{ color: '#0284C7' }}>{row.assignedDepartment?.nameAr || '— لم يحدد —'}</Typography>
-                      <Typography variant="caption" style={{ color: '#059669', display: 'block' }}>المدرب: {row.assignedTrainer?.person?.nameAr || '— لم يحدد —'}</Typography>
-                    </TableCell>
-                    <TableCell><Chip label={st.label} color={st.color} size="small" style={{ fontWeight: 700 }} /></TableCell>
                     <TableCell align="center">
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
-                        <Button size="small" variant="outlined" startIcon={<Eye size={14} />}
-                          onClick={() => setSelectedRow(row)}
-                          sx={{ borderColor: '#0F766E', color: '#0F766E', '&:hover': { backgroundColor: 'rgba(15,118,110,0.08)' }, fontSize: 12 }}>
-                          تفاصيل المسار
-                        </Button>
-                        {canAct && row.status === 'allocated' && (
-                          <Button size="small" variant="contained" color="primary" sx={{ fontSize: 11 }}
-                            startIcon={startReviewMut.isPending ? <CircularProgress size={12} color="inherit" /> : <PlayCircle size={13} />}
-                            disabled={startReviewMut.isPending}
-                            onClick={() => { setSelectedRow(row); startReviewMut.mutate(row.id); }}>
-                            بدء المراجعة
-                          </Button>
-                        )}
-                        {canAct && row.status === 'hospital_review' && (
-                          <Button size="small" variant="contained" color="success" sx={{ fontSize: 11 }}
-                            startIcon={acceptMut.isPending ? <CircularProgress size={12} color="inherit" /> : <CheckCircle2 size={13} />}
-                            disabled={acceptMut.isPending}
-                            onClick={() => { setSelectedRow(row); acceptMut.mutate(row.id); }}>
-                            قبول
-                          </Button>
-                        )}
-                        {canAct && (row.status === 'hospital_accepted' || row.status === 'active') && (
-                          <Button size="small" variant="contained" color="primary" sx={{ fontSize: 11 }}
-                            startIcon={<Edit3 size={13} />}
-                            onClick={() => { setSelectedRow(row); openActionDialog('assign'); }}>
-                            إسناد قسم / مدرب
-                          </Button>
-                        )}
-                      </Box>
+                      <Button size="small" variant="outlined" startIcon={<Eye size={14} />}
+                        onClick={() => setSelectedRow(row)}>
+                        التفاصيل
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -514,13 +478,11 @@ export const AcceptanceChain: React.FC = () => {
       )}
 
       <Dialog open={Boolean(selectedRow)} onClose={() => setSelectedRow(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, borderBottom: '1px solid #E2E8F0', pb: 1.5 }}>
-          تفاصيل مسار القبول — {selectedRow?.nameAr}
-        </DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800 }}>تفاصيل مرشح سلسلة القبول — {selectedRow?.nameAr}</DialogTitle>
         <DialogContent dividers sx={{ pt: 2 }}>
           {selectedRow && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box sx={{ p: 2, borderRadius: 2, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+              <Box sx={{ p: 2, borderRadius: 2, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', overflowX: 'auto' }}>
                 <Typography variant="subtitle2" fontWeight={700} color="primary" sx={{ mb: 1 }}>
                   مؤشر تقدم الطلب عبر مراحل سلسلة القبول:
                 </Typography>
@@ -529,11 +491,11 @@ export const AcceptanceChain: React.FC = () => {
                   let stepIdx = st.stepIndex;
                   if (selectedRow.assignedDepartmentId && selectedRow.assignedTrainerProfileId && stepIdx < 2) stepIdx = 2;
                   return (
-                    <Stepper activeStep={stepIdx < 0 ? 0 : stepIdx} alternativeLabel>
+                    <Stepper activeStep={stepIdx < 0 ? 0 : stepIdx} alternativeLabel sx={{ minWidth: 280 }}>
                       {WORKFLOW_STEPS.map((label, idx) => (
                         <Step key={label} completed={stepIdx >= 0 && stepIdx > idx}>
                           <StepLabel error={stepIdx < 0 && idx === 0}>
-                            <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700 }}>{label}</Typography>
+                            <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 700 }}>{label}</Typography>
                           </StepLabel>
                         </Step>
                       ))}
@@ -542,7 +504,7 @@ export const AcceptanceChain: React.FC = () => {
                 })()}
               </Box>
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, fontSize: 13 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, fontSize: 13 }}>
                 <div><strong>اسم المتدرب:</strong> {selectedRow.nameAr}</div>
                 <div><strong>رقم الهوية / الرقم الوظيفي:</strong> {selectedRow.nationalId || '—'}</div>
                 <div><strong>التخصص التدريبي:</strong> {selectedRow.specialty || selectedRow.trainingRequest?.specialtyAr || '—'}</div>

@@ -75,21 +75,21 @@ export const AuditLogs: React.FC = () => {
         ]}
     >
 
-      {/* Filters & Search */}
-      <div className="glass-card" style={{ padding: '20px', display: 'flex', gap: '16px', alignItems: 'center' }}>
+      {/* Filter / Search Bar */}
+      <div className="glass-card" style={{ padding: '14px 16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
         <TextField
           placeholder="بحث في اسم العملية، الكيان، أو عنوان IP..."
           variant="outlined"
           size="small"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ width: '360px' }}
+          sx={{ minWidth: { xs: '100%', sm: 220 }, flex: '1 1 auto' }}
           InputProps={{
             startAdornment: <Search size={18} color="#94a3b8" style={{ marginLeft: '8px' }} />,
           }}
         />
 
-        <FormControl size="small" style={{ minWidth: '180px' }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 160 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
           <InputLabel id="entity-filter-label">تصفية حسب الكيان</InputLabel>
           <Select
             labelId="entity-filter-label"
@@ -111,7 +111,7 @@ export const AuditLogs: React.FC = () => {
         (logs).length === 0 ? (
           <div className="glass-card"><EmptyState icon={Shield} title="لا توجد سجلات تدقيق" /></div>
         ) : (
-          <CardGrid>
+          <CardGrid min={280}>
             {logs.map((log: any) => (
               <EntityCard
                 key={log.id}
@@ -129,7 +129,7 @@ export const AuditLogs: React.FC = () => {
           </CardGrid>
         )
       ) : (
-      <TableContainer component={Paper} className="glass-card">
+      <TableContainer component={Paper} className="glass-card table-scroll" sx={{ width: '100%', overflowX: 'auto' }}>
         <Table>
           <TableHead>
             <TableRow>

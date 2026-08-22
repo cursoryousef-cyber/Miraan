@@ -373,115 +373,111 @@ export const MySchedule: React.FC = () => {
       )}
 
       {/* Workspace Controls & Filters */}
-      {isTrainer && (
-        <Paper className="glass-card" style={{ padding: space.lg, borderRadius: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: space.md, marginBottom: space.md }}>
-            {/* View Mode Tabs */}
-            <div style={{ display: 'flex', gap: space.xs, background: '#F1F5F9', padding: '4px', borderRadius: '8px' }}>
-              <Button
-                size="small"
-                variant={viewMode === 'list' ? 'contained' : 'text'}
-                onClick={() => setViewMode('list')}
-                style={{ fontSize: 13, fontWeight: 700, borderRadius: '6px' }}
-              >
-                قائمة المناوبات
-              </Button>
-              <Button
-                size="small"
-                variant={viewMode === 'cards' ? 'contained' : 'text'}
-                onClick={() => setViewMode('cards')}
-                style={{ fontSize: 13, fontWeight: 700, borderRadius: '6px' }}
-              >
-                بطاقات الشفتات
-              </Button>
-              <Button
-                size="small"
-                variant={viewMode === 'schedules' ? 'contained' : 'text'}
-                onClick={() => setViewMode('schedules')}
-                style={{ fontSize: 13, fontWeight: 700, borderRadius: '6px' }}
-              >
-                الجداول المعتمدة
-              </Button>
-            </div>
-
-            {/* Search Input */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: space.sm, minWidth: '260px' }}>
-              <TextField
-                size="small"
-                placeholder="بحث بالجلسة، المتدرب، القسم، أو الموقع..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: <Search size={16} color="#94A3B8" style={{ marginLeft: 8 }} />,
-                }}
-                fullWidth
-              />
-            </div>
+      <Paper className="glass-card" style={{ padding: space.lg, borderRadius: '12px' }}>
+        <div style={{ display: 'flex', gap: space.md, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: space.md }}>
+          <div style={{ display: 'flex', gap: space.xs, background: '#F1F5F9', padding: '4px', borderRadius: '8px', flexShrink: 0 }}>
+            <Button
+              size="small"
+              variant={viewMode === 'list' ? 'contained' : 'text'}
+              onClick={() => setViewMode('list')}
+              style={{ fontSize: 12.5, fontWeight: 700, borderRadius: '6px' }}
+            >
+              قائمة المناوبات
+            </Button>
+            <Button
+              size="small"
+              variant={viewMode === 'cards' ? 'contained' : 'text'}
+              onClick={() => setViewMode('cards')}
+              style={{ fontSize: 12.5, fontWeight: 700, borderRadius: '6px' }}
+            >
+              بطاقات الشفتات
+            </Button>
+            <Button
+              size="small"
+              variant={viewMode === 'schedules' ? 'contained' : 'text'}
+              onClick={() => setViewMode('schedules')}
+              style={{ fontSize: 12.5, fontWeight: 700, borderRadius: '6px' }}
+            >
+              الجداول المعتمدة
+            </Button>
           </div>
 
-          {/* Filter Bar */}
-          <div style={{ display: 'flex', gap: space.md, flexWrap: 'wrap', alignItems: 'center' }}>
-            <FormControl size="small" style={{ minWidth: 140 }}>
-              <InputLabel>الفترة الزمنية</InputLabel>
-              <Select value={dateFilter} label="الفترة الزمنية" onChange={(e) => setDateFilter(e.target.value as any)}>
-                <MenuItem value="all">جميع التواريخ</MenuItem>
-                <MenuItem value="today">مناوبات اليوم</MenuItem>
-                <MenuItem value="week">هذا الأسبوع</MenuItem>
-                <MenuItem value="month">هذا الشهر</MenuItem>
-              </Select>
-            </FormControl>
+          <div style={{ display: 'flex', alignItems: 'center', gap: space.sm, flex: '1 1 220px', minWidth: 0, maxWidth: '100%' }}>
+            <TextField
+              size="small"
+              placeholder="بحث بالجلسة، القسم، التاريخ، أو الموقع..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: <Search size={16} color="#94A3B8" style={{ marginLeft: 8 }} />,
+              }}
+              fullWidth
+            />
+          </div>
+        </div>
 
-            <FormControl size="small" style={{ minWidth: 150 }}>
-              <InputLabel>القسم الطبي</InputLabel>
-              <Select value={deptFilter} label="القسم الطبي" onChange={(e) => setDeptFilter(e.target.value)}>
-                <MenuItem value="all">جميع الأقسام</MenuItem>
-                {departments.map((d) => (
-                  <MenuItem key={d} value={d}>{d}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+        <div style={{ display: 'flex', gap: space.md, flexWrap: 'wrap', alignItems: 'center', width: '100%' }}>
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 130 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
+            <InputLabel>الفترة الزمنية</InputLabel>
+            <Select value={dateFilter} label="الفترة الزمنية" onChange={(e) => setDateFilter(e.target.value as any)}>
+              <MenuItem value="all">جميع التواريخ</MenuItem>
+              <MenuItem value="today">مناوبات اليوم</MenuItem>
+              <MenuItem value="week">هذا الأسبوع</MenuItem>
+              <MenuItem value="month">هذا الشهر</MenuItem>
+            </Select>
+          </FormControl>
 
-            <FormControl size="small" style={{ minWidth: 140 }}>
-              <InputLabel>نوع الشفت</InputLabel>
-              <Select value={shiftFilter} label="نوع الشفت" onChange={(e) => setShiftFilter(e.target.value)}>
-                <MenuItem value="all">جميع الشفتات</MenuItem>
-                <MenuItem value="morning">صباحية</MenuItem>
-                <MenuItem value="evening">مسائية</MenuItem>
-                <MenuItem value="night">ليلية</MenuItem>
-                <MenuItem value="24h">٢٤ ساعة</MenuItem>
-              </Select>
-            </FormControl>
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 140 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
+            <InputLabel>القسم الطبي</InputLabel>
+            <Select value={deptFilter} label="القسم الطبي" onChange={(e) => setDeptFilter(e.target.value)}>
+              <MenuItem value="all">جميع الأقسام</MenuItem>
+              {departments.map((d) => (
+                <MenuItem key={d} value={d}>{d}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-            <FormControl size="small" style={{ minWidth: 140 }}>
-              <InputLabel>حالة المناوبة</InputLabel>
-              <Select value={statusFilter} label="حالة المناوبة" onChange={(e) => setStatusFilter(e.target.value)}>
-                <MenuItem value="all">جميع الحالات</MenuItem>
-                <MenuItem value="scheduled">مجدولة</MenuItem>
-                <MenuItem value="in_progress">جارية الآن</MenuItem>
-                <MenuItem value="completed">مكتملة</MenuItem>
-                <MenuItem value="cancelled">ملغاة</MenuItem>
-              </Select>
-            </FormControl>
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 130 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
+            <InputLabel>نوع الشفت</InputLabel>
+            <Select value={shiftFilter} label="نوع الشفت" onChange={(e) => setShiftFilter(e.target.value)}>
+              <MenuItem value="all">جميع الشفتات</MenuItem>
+              <MenuItem value="morning">صباحية</MenuItem>
+              <MenuItem value="evening">مسائية</MenuItem>
+              <MenuItem value="night">ليلية</MenuItem>
+              <MenuItem value="24h">٢٤ ساعة</MenuItem>
+            </Select>
+          </FormControl>
 
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 130 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
+            <InputLabel>حالة المناوبة</InputLabel>
+            <Select value={statusFilter} label="حالة المناوبة" onChange={(e) => setStatusFilter(e.target.value)}>
+              <MenuItem value="all">جميع الحالات</MenuItem>
+              <MenuItem value="scheduled">مجدولة</MenuItem>
+              <MenuItem value="in_progress">جارية الآن</MenuItem>
+              <MenuItem value="completed">مكتملة</MenuItem>
+              <MenuItem value="cancelled">ملغاة</MenuItem>
+            </Select>
+          </FormControl>
+
+          {(searchTerm || dateFilter !== 'all' || deptFilter !== 'all' || shiftFilter !== 'all' || statusFilter !== 'all') && (
             <Button
               size="small"
               variant="text"
-              startIcon={<RefreshCw size={14} />}
               onClick={() => {
+                setSearchTerm('');
                 setDateFilter('all');
                 setDeptFilter('all');
-                setStatusFilter('all');
                 setShiftFilter('all');
-                setSearchTerm('');
-                refetch();
+                setStatusFilter('all');
               }}
-              style={{ color: '#64748B' }}
+              style={{ color: '#DC2626', fontWeight: 700, fontSize: 12.5 }}
             >
-              إعادة الضبط
+              إعادة ضبط
             </Button>
-          </div>
-        </Paper>
-      )}
+          )}
+        </div>
+      </Paper>
+
 
       {/* Main Content Area */}
       {isLoading ? (
@@ -496,8 +492,8 @@ export const MySchedule: React.FC = () => {
             hint="حدّث الصفحة، وإن تكرر الأمر راجع إدارة التدريب بالمستشفى."
           />
         </Panel>
-      ) : isTrainer && viewMode === 'list' ? (
-        /* Trainer View Mode: List / Interactive Table */
+      ) : viewMode === 'list' ? (
+        /* View Mode: List / Interactive Table */
         <Panel
           title={`قائمة المناوبات والجلسات التدريبية (${filteredSessions.length} جلسة)`}
           icon={CalendarDays}
@@ -590,8 +586,8 @@ export const MySchedule: React.FC = () => {
             </TableContainer>
           )}
         </Panel>
-      ) : isTrainer && viewMode === 'cards' ? (
-        /* Trainer View Mode: Cards Grid */
+      ) : viewMode === 'cards' ? (
+        /* View Mode: Cards Grid */
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: space.md }}>
           {filteredSessions.map((sess) => (
             <Paper

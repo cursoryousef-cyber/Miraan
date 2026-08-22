@@ -392,11 +392,12 @@ export const TrainerCards: React.FC<{ onNavigate: (tab: string) => void }> = ({ 
             size="small" placeholder="بحث باسم المدرب أو الرقم الوظيفي..." value={search}
             onChange={(e) => setSearch(e.target.value)}
             InputProps={{ startAdornment: <Search size={16} style={{ marginLeft: 8, color: colour.muted }} /> }}
-            sx={{ minWidth: 240 }}
+            sx={{ minWidth: { xs: '100%', sm: 200 }, flex: '1 1 auto' }}
           />
           <TextField
             size="small" select label="القسم السريري" value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)} sx={{ minWidth: 180 }}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            sx={{ minWidth: { xs: '100%', sm: 160 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}
           >
             <MenuItem value="all">كل الأقسام</MenuItem>
             {allDepartments.map((d: any) => <MenuItem key={d.id} value={d.id}>{d.nameAr}</MenuItem>)}
@@ -404,7 +405,8 @@ export const TrainerCards: React.FC<{ onNavigate: (tab: string) => void }> = ({ 
 
           <TextField
             size="small" select label="أهلية التدريب" value={eligibilityFilter}
-            onChange={(e) => setEligibilityFilter(e.target.value)} sx={{ minWidth: 160 }}
+            onChange={(e) => setEligibilityFilter(e.target.value)}
+            sx={{ minWidth: { xs: '100%', sm: 150 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}
           >
             <MenuItem value="all">جميع الحالات</MenuItem>
             <MenuItem value="qualified">مؤهل للتدريب</MenuItem>

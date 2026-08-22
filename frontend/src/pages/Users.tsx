@@ -307,20 +307,20 @@ export const UsersPage: React.FC = () => {
         </Box>
       </Alert>
 
-      <div className="glass-card" style={{ padding: `${space.md}px ${space.xl}px`, display: 'flex', gap: space.md, alignItems: 'center' }}>
+      <div className="glass-card" style={{ padding: `${space.md}px ${space.lg}px`, display: 'flex', gap: space.md, alignItems: 'center', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
         <TextField
           placeholder="البحث باسم المستخدم، البريد الإلكتروني، أو الهوية الوطنية..."
           variant="outlined"
           size="small"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ minWidth: 380, flex: '0 1 440px' }}
+          sx={{ minWidth: { xs: '100%', sm: 260 }, flex: '1 1 320px' }}
           InputProps={{
             startAdornment: <Search size={18} color={colour.faint} style={{ marginLeft: 8 }} />,
           }}
         />
         {isPlatformOwner && (
-          <Chip label="عرض شامل لجميع الجهات والمستشفيات (Global Admin View)" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
+          <Chip label="عرض شامل لجميع الجهات والمستشفيات (Global Admin View)" color="primary" variant="outlined" sx={{ fontWeight: 700, fontSize: 11.5 }} />
         )}
       </div>
 
@@ -328,7 +328,7 @@ export const UsersPage: React.FC = () => {
         accounts.length === 0 ? (
           <EmptyState icon={UsersIcon} title="لا توجد حسابات مطابقة" hint="جرّب تغيير كلمة البحث أو فلاتر التعيين." />
         ) : (
-          <CardGrid min={320}>
+          <CardGrid min={280}>
             {accounts.map((u: any) => {
               const mainRole = u.userRoles?.[0]?.role ?? u.roles?.[0]?.role ?? u.roles?.[0];
               const roleName = mainRole?.nameAr || mainRole?.code || 'مستخدم';

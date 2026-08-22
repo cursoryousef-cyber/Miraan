@@ -559,8 +559,8 @@ export const TrainerDashboard: React.FC = () => {
                   (traineeDetail.tasks ?? []).map((t: any) => (
                     editingTaskId === t.id ? (
                       <div key={t.id} style={{ display: 'flex', gap: space.md, alignItems: 'center', flexWrap: 'wrap', padding: space.sm }}>
-                        <TextField size="small" label="المهمة" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-                        <TextField size="small" type="date" label="تاريخ الاستحقاق" value={editDue} onChange={(e) => setEditDue(e.target.value)} InputLabelProps={{ shrink: true }} />
+                        <TextField size="small" label="المهمة" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} sx={{ flex: '1 1 160px', minWidth: { xs: '100%', sm: 160 } }} />
+                        <TextField size="small" type="date" label="تاريخ الاستحقاق" value={editDue} onChange={(e) => setEditDue(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ minWidth: { xs: '100%', sm: 140 } }} />
                         <Button size="small" variant="contained" disabled={!editTitle.trim() || updateTaskMutation.isPending}
                           onClick={() => updateTaskMutation.mutate({ id: t.id, titleAr: editTitle, dueDate: editDue })}>
                           حفظ
@@ -592,11 +592,11 @@ export const TrainerDashboard: React.FC = () => {
                 <div style={{ display: 'flex', gap: space.md, alignItems: 'center', marginTop: space.lg, flexWrap: 'wrap' }}>
                   <TextField
                     size="small" label="المهمة / النشاط السريري" value={taskTitle}
-                    onChange={(e) => setTaskTitle(e.target.value)} style={{ flex: 1, minWidth: 200 }}
+                    onChange={(e) => setTaskTitle(e.target.value)} sx={{ flex: '1 1 180px', minWidth: { xs: '100%', sm: 180 } }}
                   />
                   <TextField
                     size="small" type="date" label="تاريخ الاستحقاق" value={taskDue}
-                    onChange={(e) => setTaskDue(e.target.value)} InputLabelProps={{ shrink: true }}
+                    onChange={(e) => setTaskDue(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ minWidth: { xs: '100%', sm: 140 } }}
                   />
                   <Button
                     variant="contained" size="small"

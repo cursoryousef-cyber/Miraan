@@ -39,7 +39,7 @@ export const DataPageShell: React.FC<{
   const identity = roleIdentity(primaryRole);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: space['2xl'] }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: space.xl, width: '100%' }}>
       <PageHeader
         eyebrow={eyebrow ?? identity.eyebrow}
         icon={icon ?? identity.icon}
@@ -69,8 +69,13 @@ export const DataPageShell: React.FC<{
         <div
           className="glass-card"
           style={{
-            padding: `${space.lg}px ${space['2xl']}px`,
-            display: 'flex', gap: space.lg, alignItems: 'center', flexWrap: 'wrap',
+            padding: '12px 16px',
+            display: 'flex',
+            gap: space.md,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            width: '100%',
+            boxSizing: 'border-box',
           }}
         >
           {toolbar}
@@ -83,8 +88,18 @@ export const DataPageShell: React.FC<{
 };
 
 /** Wraps a table so it scrolls inside its own card, never the page. */
-export const TableCard: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="glass-card table-scroll" style={{ borderColor: colour.border }}>
+export const TableCard: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
+  <div
+    className="glass-card table-scroll"
+    style={{
+      borderColor: colour.border,
+      width: '100%',
+      overflowX: 'auto',
+      WebkitOverflowScrolling: 'touch',
+      boxSizing: 'border-box',
+      ...style,
+    }}
+  >
     {children}
   </div>
 );

@@ -137,7 +137,7 @@ export const App: React.FC = () => {
 
                   {/* University + Cluster + Hospital + Academic */}
                   <Route path="affiliations" element={<RoleRoute allowedRoles={[...UNIVERSITY, ...CLUSTER]}><Affiliations /></RoleRoute>} />
-                  <Route path="cluster-trainees" element={<RoleRoute allowedRoles={[...CLUSTER, ...PLATFORM]}><ClusterTrainees /></RoleRoute>} />
+                  <Route path="cluster-trainees" element={<RoleRoute allowedRoles={[...CLUSTER, ...HOSPITAL, ...PLATFORM]}><ClusterTrainees /></RoleRoute>} />
                   {/* Training program catalog. The cluster authors it; the
                       university sponsor and hospital read it to pick/allocate,
                       so the route is open to readers and the page itself
@@ -167,8 +167,8 @@ export const App: React.FC = () => {
                   />
 
                   <Route path="acceptance-chain" element={<RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...PLATFORM]}><AcceptanceChain /></RoleRoute>} />
-                  <Route path="incidents" element={<RoleRoute allowedRoles={[...HOSPITAL, ...HOSPITAL_ADMIN, ...TRAINER, ...CLUSTER, TRAINEE[0], ...PLATFORM]}><Incidents /></RoleRoute>} />
-                  <Route path="graduation" element={<RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...ACADEMIC, 'university_administrator', ...PLATFORM]}><Graduation /></RoleRoute>} />
+                  <Route path="incidents" element={<RoleRoute allowedRoles={[...HOSPITAL, ...HOSPITAL_ADMIN, ...TRAINER, ...CLUSTER, ...UNIVERSITY, ...ACADEMIC, ...TRAINEE, ...PLATFORM]}><Incidents /></RoleRoute>} />
+                  <Route path="graduation" element={<RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...ACADEMIC, ...UNIVERSITY, ...PLATFORM]}><Graduation /></RoleRoute>} />
 
                   {/* Hospital + Trainer */}
                   {/* Training events: senders (cluster/hospital/trainer) and recipients. The
@@ -188,7 +188,7 @@ export const App: React.FC = () => {
                       workspace's builder; nothing here writes. */}
                   <Route path="schedules" element={<RoleRoute allowedRoles={[...TRAINER, ...TRAINEE]}><MySchedule /></RoleRoute>} />
                   <Route path="logbook" element={<RoleRoute allowedRoles={[...TRAINER, ...TRAINEE, ...HOSPITAL]}><LogbookPage /></RoleRoute>} />
-                  <Route path="notifications" element={<RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...TRAINEE]}><Notifications /></RoleRoute>} />
+                  <Route path="notifications" element={<RoleRoute allowedRoles={[...HOSPITAL, ...HOSPITAL_ADMIN, ...TRAINER, ...TRAINEE, ...CLUSTER, ...UNIVERSITY, ...ACADEMIC, ...PLATFORM]}><Notifications /></RoleRoute>} />
 
                   {/* Trainee only */}
                   <Route path="declarations" element={<RoleRoute allowedRoles={TRAINEE}><Declarations /></RoleRoute>} />
@@ -202,7 +202,7 @@ export const App: React.FC = () => {
                       sidebar links here — the route was the only thing bouncing it
                       back to /. The page renders read-only without authoring
                       rights, so this grants reading and nothing more. */}
-                  <Route path="reports" element={<RoleRoute allowedRoles={[...ACADEMIC, ...CLUSTER, ...HOSPITAL, ...HOSPITAL_ADMIN, ...PLATFORM]}><Reports /></RoleRoute>} />
+                  <Route path="reports" element={<RoleRoute allowedRoles={[...ACADEMIC, ...UNIVERSITY, ...CLUSTER, ...HOSPITAL, ...HOSPITAL_ADMIN, ...PLATFORM]}><Reports /></RoleRoute>} />
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />

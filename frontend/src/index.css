@@ -68,21 +68,27 @@ body {
 }
 
 /* Mobile Responsiveness Utilities */
-@media (max-width: 768px) {
-  .responsive-table {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+.responsive-table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Console layout utilities ──────────────────────────────────────────────
    The split layout is main content beside a narrower rail on wide screens and
-   a single stacked column below 1100px, so no page ever scrolls sideways. */
-.split-grid { grid-template-columns: 1fr; }
-@media (min-width: 1100px) {
-  .split-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+   a single stacked column below 1024px, so no page ever scrolls sideways. */
+.split-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+@media (min-width: 1024px) {
+  .split-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 20px;
+  }
 }
 
 /* Tables inside cards scroll within their own box, never the page. */
@@ -93,77 +99,123 @@ body {
 }
 
 /* Nothing is allowed to push the page wider than the viewport. */
-#root, main { max-width: 100%; }
-img, svg, table { max-width: 100%; }
+#root, main {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+img, svg, table {
+  max-width: 100%;
+}
 
 /* ── KPI grid ──────────────────────────────────────────────────────────────
-   Column counts are chosen so the row divides evenly for the number of tiles
-   on the page, instead of `auto-fit` leaving a half-empty final row. */
+   Intelligent multi-breakpoint ladder:
+   - 320px - 480px: 1 to 2 columns
+   - 481px - 768px: 2 to 3 columns
+   - 769px - 1100px: 3 to 4 columns
+   - 1100px+: 4 to 6 columns
+*/
 .kpi-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr));
   align-items: stretch;
 }
-@media (min-width: 700px) {
-  .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 480px) {
+  .kpi-grid {
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  }
+}
+@media (min-width: 768px) {
+  .kpi-grid {
+    gap: 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .kpi-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (min-width: 1180px) {
+@media (min-width: 1100px) {
   .kpi-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .kpi-grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .kpi-grid.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .kpi-grid.cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .kpi-grid.cols-7 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1400px) {
+  .kpi-grid.cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 }
 
 /* ── Filter toolbars ───────────────────────────────────────────────────────
-   Pages set fixed pixel widths on their search fields, which overflow the card
-   they sit in once the viewport is narrower than that width. Cap every control
-   to its container and let it grow instead. */
+   Fields wrap naturally, keep intrinsic minimums, and never cause horizontal scroll. */
 .glass-card .MuiFormControl-root,
 .glass-card .MuiTextField-root {
   max-width: 100%;
   min-width: 0;
 }
-@media (max-width: 700px) {
-  .glass-card .MuiFormControl-root,
-  .glass-card .MuiTextField-root {
-    width: 100% !important;
-    flex: 1 1 100% !important;
-  }
-  /* Tabs inside a filter bar scroll rather than squeeze. */
-  .glass-card .MuiTabs-root { max-width: 100%; }
+.glass-card .MuiTabs-root {
+  max-width: 100%;
 }
 
 /* Long page titles wrap instead of forcing the header wider. */
-main h1 { overflow-wrap: anywhere; }
-
-/* ── Mobile experience ─────────────────────────────────────────────────────
-   Room to breathe at the end of a scroll (so the last card is not flush
-   against the edge, and clears any floating action button). */
-main { padding-bottom: 24px; }
-@media (max-width: 900px) {
-  main { padding: 16px 16px 96px !important; }
-  /* Page header actions stack full-width rather than crowding the title. */
-  main > header { flex-direction: column; align-items: stretch; }
-  main > header > div:last-child { width: 100%; }
-  main > header > div:last-child > * { flex: 1 1 auto; }
+main h1 {
+  overflow-wrap: anywhere;
 }
 
-/* Buttons inside a toolbar keep their intrinsic width on mobile — the
-   full-width rule above is for page-level actions, not inline filters. */
-@media (max-width: 600px) {
-  .glass-card .MuiButton-root { width: auto; }
+/* ── Mobile experience ─────────────────────────────────────────────────────
+   Balanced padding across breakpoints without bloating buttons. */
+main {
+  padding: 16px;
+  box-sizing: border-box;
+}
+@media (min-width: 768px) {
+  main {
+    padding: 20px;
+  }
+}
+@media (min-width: 1024px) {
+  main {
+    padding: 24px;
+  }
 }
 
 /* Floating action button clears the safe area on iOS. */
 .fab-root {
   position: fixed;
-  inset-inline-start: 20px;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  inset-inline-start: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   z-index: 1200;
 }
 
-/* Shown only on phones — desktop keeps the action in the page header. */
-.mobile-only { display: none !important; }
-@media (max-width: 900px) { .mobile-only { display: inline-flex !important; } }
+/* Shown only on smaller screens — desktop keeps the action in the page header. */
+.mobile-only {
+  display: none !important;
+}
+@media (max-width: 768px) {
+  .mobile-only {
+    display: inline-flex !important;
+  }
+}
+
+/* Shown only on tablet/desktop screens */
+.desktop-only {
+  display: flex !important;
+}
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* iOS Safe Area & Accessibility Utility */
+.safe-bottom-padding {
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+}
+
+/* Focus visible styling for enterprise keyboard accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #0F766E !important;
+  outline-offset: 2px !important;
+}

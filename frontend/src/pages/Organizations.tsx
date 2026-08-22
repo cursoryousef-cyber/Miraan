@@ -389,10 +389,10 @@ export const Organizations: React.FC = () => {
             size="small"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 280, flex: '0 1 320px' }}
+            sx={{ minWidth: { xs: '100%', sm: 220 }, flex: '1 1 auto' }}
             InputProps={{ startAdornment: <Search size={17} color={colour.faint} style={{ marginLeft: 8 }} /> }}
           />
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
             <InputLabel id="org-type-filter-label">نوع الجهة</InputLabel>
             <Select
               labelId="org-type-filter-label"
@@ -404,8 +404,14 @@ export const Organizations: React.FC = () => {
               {orgTypes?.map((t: any) => <MenuItem key={t.id} value={t.id}>{t.nameAr}</MenuItem>)}
             </Select>
           </FormControl>
-          <Tabs value={tabValue} onChange={(_, val) => setTabValue(val)} variant="scrollable" scrollButtons="auto"
-            sx={{ minHeight: 40, '& .MuiTab-root': { minHeight: 40, fontSize: 12.5, fontWeight: 700 } }}>
+          <Tabs
+            value={tabValue}
+            onChange={(_, val) => setTabValue(val)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{ minHeight: 38, maxWidth: '100%', '& .MuiTab-root': { minHeight: 38, fontSize: 12, fontWeight: 700, px: 1.5 } }}
+          >
             <Tab label="الكل" value="all" />
             <Tab label="نشط" value="active" />
             <Tab label="مسودة" value="draft" />

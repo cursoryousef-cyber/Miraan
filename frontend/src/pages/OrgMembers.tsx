@@ -187,7 +187,7 @@ export const OrgMembersPage: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
-              flex: 1, minWidth: 220, padding: `${space.sm}px ${space.md}px`,
+              flex: '1 1 200px', minWidth: 0, maxWidth: '100%', padding: `${space.sm}px ${space.md}px`,
               background: colour.canvas, border: `1px solid ${colour.border}`,
               borderRadius: radius.md, color: colour.text, fontSize: font.body, outline: 'none',
               fontFamily: 'inherit',
@@ -199,8 +199,9 @@ export const OrgMembersPage: React.FC = () => {
           {canAdd && (
             <Button
               variant="contained"
+              size="small"
               onClick={() => setShowAddModal(true)}
-              sx={{ background: colour.primary, fontWeight: 700, borderRadius: 2, marginRight: 'auto' }}
+              sx={{ background: colour.primary, fontWeight: 700, borderRadius: 2 }}
             >
               إضافة عضو جديد +
             </Button>

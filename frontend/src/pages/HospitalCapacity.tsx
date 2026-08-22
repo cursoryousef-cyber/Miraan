@@ -402,7 +402,7 @@ export const HospitalCapacity: React.FC = () => {
               </Button>
             )}
           </Box>
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
+          <TableContainer component={Paper} className="glass-card table-scroll" sx={{ mb: 3, width: '100%', overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -511,7 +511,7 @@ export const HospitalCapacity: React.FC = () => {
             <UserCog size={18} />
             <Typography variant="subtitle1" fontWeight={700}>الطاقة لكل مشرف / مدرب</Typography>
           </Box>
-          <TableContainer component={Paper}>
+          <TableContainer component={Paper} className="glass-card table-scroll" sx={{ width: '100%', overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
                 <TableRow>

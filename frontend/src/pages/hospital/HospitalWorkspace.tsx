@@ -19,6 +19,7 @@ import { LogbookPage } from '../Logbook';
 import { Incidents } from '../Incidents';
 import { Graduation } from '../Graduation';
 import { Notifications } from '../Notifications';
+import { ClusterTrainees } from '../ClusterTrainees';
 
 import { ScheduleBuilder } from './ScheduleBuilder';
 
@@ -28,27 +29,37 @@ interface Section {
   render: (goTo: (tab: string) => void) => React.ReactNode;
 }
 
+const TAB_ALIASES: Record<string, string> = {
+  distribution: 'trainees',
+  allocations: 'trainees',
+  interns: 'trainees',
+  trainers_cards: 'trainers',
+  reassignments: 'reassignment',
+};
+
 const SECTIONS: Section[] = [
-  { key: 'overview',     label: 'نظرة عامة',         render: (goTo) => <WorkspaceOverview onNavigate={goTo} /> },
-  { key: 'requests',     label: '📥 طلبات التدريب الواردة', render: () => <HospitalReview /> },
-  { key: 'capacity',     label: 'الطاقة الاستيعابية', render: () => <HospitalCapacity /> },
-  { key: 'schedules',    label: '📅 الجداول التدريبية', render: () => <ScheduleBuilder /> },
-  { key: 'trainers',     label: 'المدربون',           render: (goTo) => <TrainerCards onNavigate={goTo} /> },
-  { key: 'calls',        label: '🔔 النداءات',        render: () => <CallsHub /> },
-  { key: 'acceptance',   label: 'سلسلة القبول',       render: () => <AcceptanceChain /> },
-  { key: 'reassignment', label: 'إعادة الإسناد',      render: () => <TrainerReassignment /> },
-  { key: 'leaves',       label: 'الإجازات',           render: () => <TrainerLeaveManagement /> },
-  { key: 'logbook',      label: 'السجل السريري',      render: () => <LogbookPage /> },
-  { key: 'eval-forms',   label: 'نماذج التقييم',      render: () => <EvaluationForms /> },
-  { key: 'incidents',    label: 'البلاغات',            render: () => <Incidents /> },
-  { key: 'graduation',   label: 'التخرج',             render: () => <Graduation /> },
-  { key: 'notifications', label: 'الإشعارات',         render: () => <Notifications /> },
+  { key: 'overview',     label: 'نظرة عامة',                 render: (goTo) => <WorkspaceOverview onNavigate={goTo} /> },
+  { key: 'requests',     label: '📥 طلبات التدريب الواردة',  render: () => <HospitalReview /> },
+  { key: 'trainees',     label: 'المتدربون والتوزيع',        render: () => <ClusterTrainees /> },
+  { key: 'capacity',     label: 'الأقسام والسعة',            render: () => <HospitalCapacity /> },
+  { key: 'schedules',    label: '📅 الجداول التدريبية',       render: () => <ScheduleBuilder /> },
+  { key: 'trainers',     label: 'بطاقات المدربين',           render: (goTo) => <TrainerCards onNavigate={goTo} /> },
+  { key: 'calls',        label: '🔔 النداءات',                render: () => <CallsHub /> },
+  { key: 'acceptance',   label: 'سلسلة القبول',               render: () => <AcceptanceChain /> },
+  { key: 'reassignment', label: 'إعادة إسناد المدربين',      render: () => <TrainerReassignment /> },
+  { key: 'leaves',       label: 'الإجازات والتغطيات',         render: () => <TrainerLeaveManagement /> },
+  { key: 'logbook',      label: 'السجل السريري',              render: () => <LogbookPage /> },
+  { key: 'eval-forms',   label: 'نماذج التقييم',              render: () => <EvaluationForms /> },
+  { key: 'incidents',    label: 'البلاغات',                  render: () => <Incidents /> },
+  { key: 'graduation',   label: 'التخرج والاعتماد',          render: () => <Graduation /> },
+  { key: 'notifications', label: 'الإشعارات',                 render: () => <Notifications /> },
 ];
 
 export const HospitalWorkspace: React.FC = () => {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
-  const requested = params.get('tab');
+  const rawRequested = params.get('tab');
+  const requested = rawRequested ? (TAB_ALIASES[rawRequested] || rawRequested) : null;
 
   const isHospitalAdmin = user?.roles?.some((r) =>
     ['hospital_training_admin', 'org_manager'].includes(r),
@@ -61,7 +72,7 @@ export const HospitalWorkspace: React.FC = () => {
     return SECTIONS;
   }, [isHospitalAdmin]);
 
-  const initial = availableSections.some((s) => s.key === requested) ? requested! : 'overview';
+  const initial = (requested && availableSections.some((s) => s.key === requested)) ? requested : 'overview';
   const [active, setActive] = useState(initial);
 
   React.useEffect(() => {
@@ -71,8 +82,13 @@ export const HospitalWorkspace: React.FC = () => {
   }, [requested, availableSections]);
 
   const goTo = (tab: string) => {
-    setActive(tab);
-    setParams({ tab }, { replace: true });
+    const canonicalTab = TAB_ALIASES[tab] || tab;
+    setActive(canonicalTab);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', canonicalTab);
+      return next;
+    }, { replace: true });
   };
 
   const section = availableSections.find((s) => s.key === active) ?? availableSections[0];

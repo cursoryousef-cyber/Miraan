@@ -162,10 +162,11 @@ export const EntityCard: React.FC<{
 };
 
 /** Responsive card grid — never narrower than the viewport. */
-export const CardGrid: React.FC<{ children: React.ReactNode; min?: number }> = ({ children, min = 320 }) => (
+export const CardGrid: React.FC<{ children: React.ReactNode; min?: number }> = ({ children, min = 270 }) => (
   <div style={{
-    display: 'grid', gap: space.xl, alignItems: 'stretch',
+    display: 'grid', gap: space.lg, alignItems: 'stretch',
     gridTemplateColumns: `repeat(auto-fill, minmax(min(${min}px, 100%), 1fr))`,
+    width: '100%', boxSizing: 'border-box',
   }}>
     {children}
   </div>
@@ -176,7 +177,6 @@ export const CardGrid: React.FC<{ children: React.ReactNode; min?: number }> = (
  *
  * Cards are the default because they answer "what is this record" faster; the
  * table stays one tap away for column-scanning work like reconciliation.
- * Collapses to icons on mobile where the labels would crowd the header.
  */
 export const ViewToggle: React.FC<{
   value: 'cards' | 'table';
@@ -187,7 +187,7 @@ export const ViewToggle: React.FC<{
   return (
     <div style={{
       display: 'inline-flex', border: `1px solid ${colour.border}`,
-      borderRadius: radius.md, overflow: 'hidden', flexShrink: 0,
+      borderRadius: radius.sm, overflow: 'hidden', flexShrink: 0,
     }}>
       {([['cards', 'بطاقات', LayoutGrid], ['table', 'جدول', List]] as const).map(([mode, label, Icon]) => (
         <button
@@ -195,15 +195,16 @@ export const ViewToggle: React.FC<{
           onClick={() => onChange(mode)}
           aria-label={label}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: compact ? '10px 12px' : '9px 14px', minHeight: 40,
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: compact ? '6px 10px' : '6px 12px', minHeight: 34,
             border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-            fontWeight: 700, fontSize: 12.5,
+            fontWeight: 700, fontSize: 12,
             background: value === mode ? colour.primarySoft : colour.surface,
             color: value === mode ? colour.primary : colour.muted,
+            transition: 'all 0.15s ease',
           }}
         >
-          <Icon size={15} />
+          <Icon size={14} />
           {!compact && label}
         </button>
       ))}

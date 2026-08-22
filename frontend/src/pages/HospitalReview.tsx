@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, DataPageShell, CardGrid, EmptyState, EntityCard, ViewToggle } from '../components/ui';
+import { PageHeader, DataPageShell, CardGrid, EmptyState, EntityCard, ViewToggle, space } from '../components/ui';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import {
-  XCircle, ArrowRightLeft, FileText, Edit3, PauseCircle, PlayCircle, AlertTriangle, Inbox, Clock3, CheckCircle2, FileWarning, Eye } from 'lucide-react';
+  XCircle, ArrowRightLeft, FileText, Edit3, PauseCircle, PlayCircle, AlertTriangle, Inbox, Clock3, CheckCircle2, FileWarning, Eye, Stethoscope,
+} from 'lucide-react';
 import {
   Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions, Alert, CircularProgress,
@@ -213,13 +214,16 @@ export const HospitalReview: React.FC = () => {
           { label: 'تنتظر مستندات', value: missingDocs, icon: FileWarning, tone: missingDocs ? 'warning' : 'neutral' },
         ]}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'flex', gap: space.md, justifyContent: 'space-between',
+        alignItems: 'center', flexWrap: 'wrap', width: '100%',
+      }}>
+        <div style={{ display: 'flex', gap: space.xs, flexWrap: 'wrap', alignItems: 'center' }}>
           <Button
             variant={filterTab === 'all' ? 'contained' : 'outlined'}
             size="small"
             onClick={() => setFilterTab('all')}
-            style={{ borderRadius: '20px' }}
+            style={{ borderRadius: '20px', fontSize: 12.5 }}
           >
             الكل ({rows.length})
           </Button>
@@ -228,7 +232,7 @@ export const HospitalReview: React.FC = () => {
             size="small"
             color="warning"
             onClick={() => setFilterTab('pending')}
-            style={{ borderRadius: '20px' }}
+            style={{ borderRadius: '20px', fontSize: 12.5 }}
           >
             بانتظار إجراء المستشفى ({pendingRows + onHold})
           </Button>
@@ -237,7 +241,7 @@ export const HospitalReview: React.FC = () => {
             size="small"
             color="success"
             onClick={() => setFilterTab('accepted')}
-            style={{ borderRadius: '20px' }}
+            style={{ borderRadius: '20px', fontSize: 12.5 }}
           >
             المقبولون والنشطون ({acceptedRows})
           </Button>
@@ -246,7 +250,7 @@ export const HospitalReview: React.FC = () => {
             size="small"
             color="error"
             onClick={() => setFilterTab('rejected')}
-            style={{ borderRadius: '20px' }}
+            style={{ borderRadius: '20px', fontSize: 12.5 }}
           >
             المرفوضون والمعادون ({rejectedRows})
           </Button>
@@ -261,7 +265,7 @@ export const HospitalReview: React.FC = () => {
         filteredRows.length === 0 ? (
           <div className="glass-card"><EmptyState icon={Inbox} title="لا توجد سجلات تطابق الفلتر الحالي" hint="تأكد من اختيار التبويب المناسب أو انتظار تحويل طلبات جديدة من التجمع الصحي." /></div>
         ) : (
-          <CardGrid>
+          <CardGrid min={280}>
             {filteredRows.map((row: any) => {
               const st = STATUS_LABELS[row.status] || { label: row.status };
               const req = row.trainingRequest;
@@ -276,7 +280,7 @@ export const HospitalReview: React.FC = () => {
               return (
                 <EntityCard
                   key={row.id}
-                  avatarText={(row.nameAr ?? '?').slice(0, 2)}
+                  icon={Stethoscope}
                   tone={row.status === 'on_hold' ? 'warning' : row.status === 'rejected' ? 'danger' : 'primary'}
                   title={row.nameAr}
                   subtitle={`الرقم: ${row.nationalId ?? '—'} · الجهة: ${sourceOrgName}`}

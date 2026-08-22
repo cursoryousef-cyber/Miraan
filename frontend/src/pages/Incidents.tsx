@@ -228,8 +228,8 @@ export const Incidents: React.FC = () => {
       {errorMsg && <Alert severity="error" onClose={() => setErrorMsg(null)}>{errorMsg}</Alert>}
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <FormControl size="small" style={{ minWidth: 160 }}>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', width: '100%' }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
           <InputLabel>الحالة</InputLabel>
           <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} label="الحالة">
             <MenuItem value="">كل الحالات</MenuItem>
@@ -238,7 +238,7 @@ export const Incidents: React.FC = () => {
             ))}
           </Select>
         </FormControl>
-        <FormControl size="small" style={{ minWidth: 160 }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
           <InputLabel>مستوى الخطورة</InputLabel>
           <Select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} label="مستوى الخطورة">
             <MenuItem value="">كل المستويات</MenuItem>

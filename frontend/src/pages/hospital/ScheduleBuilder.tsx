@@ -594,20 +594,20 @@ export const ScheduleBuilder: React.FC = () => {
           </Grid>
 
           <Grid item xs={12} md={4}>
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 0.8, justifyContent: { xs: 'flex-start', md: 'center' }, flexWrap: 'wrap' }}>
               <Button
                 size="small"
                 variant={activeView === 'week' ? 'contained' : 'outlined'}
                 onClick={() => setActiveView('week')}
               >
-                عرض أسبوعي (Week View)
+                أسبوعي (Week)
               </Button>
               <Button
                 size="small"
                 variant={activeView === 'day' ? 'contained' : 'outlined'}
                 onClick={() => setActiveView('day')}
               >
-                عرض يومي (Day View)
+                يومي (Day)
               </Button>
               <Button
                 size="small"
@@ -644,29 +644,26 @@ export const ScheduleBuilder: React.FC = () => {
         </Grid>
       </Card>
 
-      {/* Schedule Hours & Progress Bar */}
+      {/* Published Status Banner */}
       {activeScheduleData && (
-        <Card sx={{ mb: 3, p: 2, background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', borderRadius: 2 }}>
+        <Card sx={{ p: 2, mb: 2, bgcolor: activeScheduleData.status === 'published' ? '#f0fdf4' : '#fffbeb', border: `1px solid ${activeScheduleData.status === 'published' ? '#bbf7d0' : '#fde68a'}`, borderRadius: 2 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={3}>
-              <Typography variant="body2" color="text.secondary">إجمالي الساعات المجدولة</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1e293b' }}>
-                {activeScheduleData.totalHours} ساعة تدريبية
+            <Grid item xs={12} sm={8}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                <Chip
+                  label={activeScheduleData.status === 'published' ? 'منشور ومعتمد' : 'مسودة قيد الإعداد'}
+                  color={activeScheduleData.status === 'published' ? 'success' : 'warning'}
+                  sx={{ fontWeight: 'bold' }}
+                />
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                  {activeScheduleData.titleAr} {(activeScheduleData as any).academicYear ? `(${(activeScheduleData as any).academicYear})` : ''}
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {(activeScheduleData as any).description || 'جدول مناوبات وجلسات تدريبية'} — الإجمالي: {activeScheduleData.totalHours} ساعة
               </Typography>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <Typography variant="body2" color="text.secondary">المتدربون المشاركون</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#2563eb' }}>
-                {activeScheduleData.participants?.length || 0} متدربين
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Typography variant="body2" color="text.secondary">عدد الجلسات والشيفتات</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#059669' }}>
-                {activeScheduleData.sessions?.length || 0} جلسة
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} sm={4} sx={{ textAlign: { xs: 'right', sm: 'left' } }}>
               <Typography variant="body2" color="text.secondary">الإصدار الحالي (Revision)</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#7c3aed' }}>
                 v{activeScheduleData.revisions?.[0]?.revision || 1} Snapshot
@@ -676,75 +673,246 @@ export const ScheduleBuilder: React.FC = () => {
         </Card>
       )}
 
-      {/* Calendar Grid View (Week View Layout) */}
+      {/* Calendar Grid View (Week / Day / Timeline Layouts) */}
       {activeScheduleData ? (
-        <Card sx={{ p: 2, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-            {activeScheduleData.titleAr} — جدول الجلسات التدريبية
-          </Typography>
+        <Card sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: { xs: '14px', sm: '15px' }, color: '#0f172a' }}>
+                {activeScheduleData.titleAr} — جلسات ومناوبات الجدول
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {activeScheduleData.sessions?.length || 0} جلسة مسجلة · {activeScheduleData.department?.nameAr || 'القسم العام'}
+              </Typography>
+            </Box>
 
-          <Grid container spacing={1} sx={{ minWidth: 800 }}>
-            {daysHeader.map((dayName, idx) => (
-              <Grid item xs={12 / 7} key={idx}>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    bgcolor: '#1e293b',
-                    color: 'white',
-                    borderRadius: 1,
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    mb: 1,
-                  }}
-                >
-                  {dayName}
-                </Box>
-                <Box sx={{ minHeight: 400, bgcolor: '#f8fafc', p: 1, borderRadius: 1, border: '1px border #e2e8f0' }}>
-                  {activeScheduleData.sessions
-                    ?.filter((s) => new Date(s.date).getDay() === idx)
-                    .map((sess, sIdx) => (
-                      <Card
-                        key={sIdx}
-                        sx={{
-                          p: 1.5,
-                          mb: 1.5,
-                          borderRadius: 1.5,
-                          borderLeft: '4px solid #2563eb',
-                          bgcolor: 'white',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                        }}
-                      >
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#1e293b' }}>
-                          {sess.startTime} - {sess.endTime}
-                        </Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">
-                          القسم: {sess.department?.nameAr || 'القسم العام'}
-                        </Typography>
-                        {sess.trainerProfile && (
-                          <Typography variant="caption" display="block" color="primary">
-                            المدرب: {sess.trainerProfile.person?.nameAr}
-                          </Typography>
-                        )}
-                        {sess.traineeProfile && (
-                          <Typography variant="caption" display="block" color="text.secondary">
-                            المتدرب: {sess.traineeProfile.person?.nameAr}
-                          </Typography>
-                        )}
-                        <Chip
-                          label={sess.sessionType || 'مرور سريري'}
-                          size="small"
-                          sx={{ mt: 1, fontSize: '0.65rem', height: 20 }}
-                        />
-                      </Card>
-                    ))}
-                </Box>
+            {/* Quick Filter inside active schedule */}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Chip
+                size="small"
+                icon={<Clock size={13} />}
+                label={`${activeScheduleData.totalHours || 0} ساعة إجمالية`}
+                sx={{ fontWeight: 600, bgcolor: '#f1f5f9' }}
+              />
+            </Box>
+          </Box>
+
+          {/* VIEW: DAY VIEW (Mobile-First Agenda) */}
+          {activeView === 'day' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {daysHeader.map((dayName, idx) => {
+                const daySessions = activeScheduleData.sessions?.filter((s) => new Date(s.date).getDay() === idx) || [];
+                return (
+                  <Box
+                    key={idx}
+                    sx={{
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      bgcolor: '#ffffff',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        p: 1.2,
+                        bgcolor: daySessions.length > 0 ? '#f8fafc' : '#ffffff',
+                        borderBottom: daySessions.length > 0 ? '1px solid #e2e8f0' : 'none',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '13px' }}>
+                        📅 {dayName}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={`${daySessions.length} جلسات`}
+                        color={daySessions.length > 0 ? 'primary' : 'default'}
+                        variant={daySessions.length > 0 ? 'filled' : 'outlined'}
+                        sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }}
+                      />
+                    </Box>
+
+                    {daySessions.length > 0 ? (
+                      <Box sx={{ p: 1.5, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(280px, 1fr))' }, gap: 1.2 }}>
+                        {daySessions.map((sess, sIdx) => (
+                          <Box
+                            key={sIdx}
+                            sx={{
+                              p: 1.2,
+                              borderRadius: 1.5,
+                              borderRight: '4px solid #2563eb',
+                              bgcolor: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              borderRightWidth: '4px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 0.5,
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', fontSize: '12px' }}>
+                                ⏰ {sess.startTime} - {sess.endTime}
+                              </Typography>
+                              <Chip
+                                label={sess.sessionType || 'مرور سريري'}
+                                size="small"
+                                sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }}
+                              />
+                            </Box>
+
+                            <Typography variant="caption" color="text.secondary">
+                              🏢 القسم: <strong>{sess.department?.nameAr || activeScheduleData.department?.nameAr || 'القسم العام'}</strong>
+                            </Typography>
+
+                            {sess.trainerProfile && (
+                              <Typography variant="caption" sx={{ color: '#0284c7', fontWeight: 600 }}>
+                                👨‍🏫 المدرب: {sess.trainerProfile.person?.nameAr}
+                              </Typography>
+                            )}
+
+                            {sess.traineeProfile && (
+                              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                                👨‍⚕️ المتدرب: {sess.traineeProfile.person?.nameAr}
+                              </Typography>
+                            )}
+                          </Box>
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" sx={{ p: 1.5, display: 'block', textAlign: 'center' }}>
+                        لا توجد جلسات مجدولة في هذا اليوم
+                      </Typography>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+
+          {/* VIEW: WEEK VIEW (Grid with Safe Scroll) */}
+          {activeView === 'week' && (
+            <Box sx={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 1 }}>
+              <Grid container spacing={1} sx={{ minWidth: { xs: 680, md: '100%' } }}>
+                {daysHeader.map((dayName, idx) => (
+                  <Grid item xs={12 / 7} key={idx}>
+                    <Box
+                      sx={{
+                        p: 1,
+                        bgcolor: '#1e293b',
+                        color: 'white',
+                        borderRadius: 1,
+                        textAlign: 'center',
+                        fontWeight: 'bold',
+                        fontSize: '12px',
+                        mb: 1,
+                      }}
+                    >
+                      {dayName}
+                    </Box>
+                    <Box sx={{ minHeight: 340, bgcolor: '#f8fafc', p: 1, borderRadius: 1, border: '1px solid #e2e8f0' }}>
+                      {activeScheduleData.sessions
+                        ?.filter((s) => new Date(s.date).getDay() === idx)
+                        .map((sess, sIdx) => (
+                          <Card
+                            key={sIdx}
+                            sx={{
+                              p: 1.2,
+                              mb: 1.2,
+                              borderRadius: 1.5,
+                              borderRight: '3px solid #2563eb',
+                              bgcolor: 'white',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                            }}
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#1e293b', fontSize: '11.5px' }}>
+                              {sess.startTime} - {sess.endTime}
+                            </Typography>
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              القسم: {sess.department?.nameAr || 'القسم العام'}
+                            </Typography>
+                            {sess.trainerProfile && (
+                              <Typography variant="caption" display="block" color="primary">
+                                المدرب: {sess.trainerProfile.person?.nameAr}
+                              </Typography>
+                            )}
+                            {sess.traineeProfile && (
+                              <Typography variant="caption" display="block" color="text.secondary">
+                                المتدرب: {sess.traineeProfile.person?.nameAr}
+                              </Typography>
+                            )}
+                            <Chip
+                              label={sess.sessionType || 'مرور سريري'}
+                              size="small"
+                              sx={{ mt: 0.8, fontSize: '0.65rem', height: 18 }}
+                            />
+                          </Card>
+                        ))}
+                    </Box>
+                  </Grid>
+                ))}
               </Grid>
-            ))}
-          </Grid>
+            </Box>
+          )}
+
+          {/* VIEW: TIMELINE VIEW (Sequential Chronological Feed) */}
+          {activeView === 'timeline' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
+              {(activeScheduleData.sessions || [])
+                .slice()
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.startTime.localeCompare(b.startTime))
+                .map((sess, tIdx) => (
+                  <Box
+                    key={tIdx}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      border: '1px solid #e2e8f0',
+                      bgcolor: '#ffffff',
+                      display: 'flex',
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      justifyContent: 'space-between',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      gap: 1,
+                      borderRight: '4px solid #7c3aed',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Box sx={{ minWidth: 90, textAlign: 'center', bgcolor: '#f1f5f9', p: 0.8, borderRadius: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {new Date(sess.date).toLocaleDateString('ar-SA', { weekday: 'short' })}
+                        </Typography>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                          {sess.date}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b' }}>
+                          {sess.startTime} → {sess.endTime} · {sess.sessionType || 'مرور سريري'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          القسم: {sess.department?.nameAr || activeScheduleData.department?.nameAr || 'القسم العام'}
+                          {sess.trainerProfile?.person?.nameAr ? ` · المدرب: ${sess.trainerProfile.person.nameAr}` : ''}
+                          {sess.traineeProfile?.person?.nameAr ? ` · المتدرب: ${sess.traineeProfile.person.nameAr}` : ''}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Chip
+                      size="small"
+                      label={sess.shiftType || 'صباحي'}
+                      sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600, bgcolor: '#faf5ff', color: '#7c3aed' }}
+                    />
+                  </Box>
+                ))}
+            </Box>
+          )}
         </Card>
       ) : (
         <Alert severity="info">الرجاء اختيار أو إنشاء جدول تدريبي لعرض التفاصيل والجلسات</Alert>
       )}
+
 
       {/* Schedule Wizard Modal */}
       <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="md" fullWidth dir="rtl">
@@ -1205,6 +1373,40 @@ export const ScheduleBuilder: React.FC = () => {
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>نوع الجلسة</InputLabel>
+                <Select value={qSessionType} label="نوع الجلسة" onChange={(e) => setQSessionType(e.target.value)}>
+                  <MenuItem value="clinical_round">مرور سريري (Clinical Round)</MenuItem>
+                  <MenuItem value="emergency_shift">مناوبة طوارئ (Emergency Shift)</MenuItem>
+                  <MenuItem value="lecture">محاضرة تعليمية (Lecture)</MenuItem>
+                  <MenuItem value="workshop">ورشة عمل (Workshop)</MenuItem>
+                  <MenuItem value="call">استدعاء / On-Call</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>المدرب المشرف (اختياري)</InputLabel>
+                <Select value={qTrainerId} label="المدرب المشرف (اختياري)" onChange={(e) => setQTrainerId(e.target.value)}>
+                  <MenuItem value="">بدون مدرب مخصص</MenuItem>
+                  {trainers?.map((tr: any) => (
+                    <MenuItem key={tr.id} value={tr.id}>{tr.person?.nameAr}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel>المتدرب المسند (اختياري)</InputLabel>
+                <Select value={qTraineeId} label="المتدرب المسند (اختياري)" onChange={(e) => setQTraineeId(e.target.value)}>
+                  <MenuItem value="">عامة / للمجموعة بأكملها</MenuItem>
+                  {trainees?.map((t: any) => (
+                    <MenuItem key={t.id} value={t.id}>{t.person?.nameAr || 'متدرب'}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
@@ -1216,7 +1418,7 @@ export const ScheduleBuilder: React.FC = () => {
                 date: qDate,
                 startTime: qStartTime,
                 endTime: qEndTime,
-                departmentId: qDeptId || activeScheduleData?.department?.nameAr || '',
+                departmentId: qDeptId || activeScheduleData?.departmentId || activeScheduleData?.department?.id || '',
                 trainerProfileId: qTrainerId || undefined,
                 traineeProfileId: qTraineeId || undefined,
                 sessionType: qSessionType,
@@ -1227,6 +1429,7 @@ export const ScheduleBuilder: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
 
       {/* Conflict Engine Modal Alert */}
       <Dialog open={conflictModalOpen} onClose={() => setConflictModalOpen(false)} maxWidth="sm" fullWidth dir="rtl">

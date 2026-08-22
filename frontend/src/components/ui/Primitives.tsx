@@ -2,6 +2,7 @@ import React from 'react';
 import { LinearProgress, Skeleton, Tooltip } from '@mui/material';
 import { ArrowLeft, ChevronLeft } from 'lucide-react';
 import { colour, font, radius, space, toneColour, type Tone } from './tokens';
+import type { ActionVariant } from './ActionGroup';
 
 /**
  * Shared building blocks for the console.
@@ -24,36 +25,46 @@ export const PageHeader: React.FC<{
   <header
     style={{
       display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-      gap: space.lg, flexWrap: 'wrap', marginBottom: space.xs,
+      gap: space.md, flexWrap: 'wrap', marginBottom: space.xs, width: '100%',
     }}
   >
-    <div style={{ display: 'flex', gap: space.md, minWidth: 0 }}>
+    <div style={{ display: 'flex', gap: space.md, minWidth: 0, flex: '1 1 auto' }}>
       {Icon && (
         <div style={{
-          width: 44, height: 44, borderRadius: radius.md, flexShrink: 0,
+          width: 38, height: 38, borderRadius: radius.md, flexShrink: 0,
           background: colour.primarySoft, display: 'grid', placeItems: 'center',
         }}>
-          <Icon size={22} color={colour.primary} />
+          <Icon size={19} color={colour.primary} />
         </div>
       )}
-      <div style={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
         {eyebrow && (
           <div style={{
             fontSize: font.caption, fontWeight: 700, color: colour.primary,
-            letterSpacing: '0.6px', marginBottom: 2,
+            letterSpacing: '0.5px', marginBottom: 2,
           }}>
             {eyebrow}
           </div>
         )}
-        <h1 style={{ fontSize: font.pageTitle, fontWeight: 800, color: colour.text, margin: 0, lineHeight: 1.25 }}>
+        <h1 style={{
+          fontSize: font.pageTitle, fontWeight: 800, color: colour.text,
+          margin: 0, lineHeight: 1.25, overflowWrap: 'anywhere',
+        }}>
           {title}
         </h1>
         {subtitle && (
-          <p style={{ fontSize: font.body, color: colour.muted, margin: `${space.xs}px 0 0` }}>{subtitle}</p>
+          <p style={{ fontSize: font.body, color: colour.muted, margin: `${space.xs}px 0 0`, lineHeight: 1.4 }}>{subtitle}</p>
         )}
       </div>
     </div>
-    {actions && <div style={{ display: 'flex', gap: space.sm, flexWrap: 'wrap' }}>{actions}</div>}
+    {actions && (
+      <div style={{
+        display: 'flex', gap: space.sm, flexWrap: 'wrap',
+        alignItems: 'center', flexShrink: 0,
+      }}>
+        {actions}
+      </div>
+    )}
   </header>
 );
 
@@ -63,22 +74,20 @@ export const PageHeader: React.FC<{
  * KPI row.
  *
  * Columns are derived from how many tiles are present so every row fills
- * completely — `auto-fit` used to leave a ragged half-empty final row, which
- * read as dead space on wide screens.
+ * completely.
  */
 export const KpiGrid: React.FC<{ children: React.ReactNode; min?: number }> = ({ children }) => {
   const count = React.Children.toArray(children).filter(Boolean).length;
-  const cols = Math.min(6, Math.max(2, count));
+  const cols = Math.min(7, Math.max(2, count));
   return <div className={`kpi-grid cols-${cols}`}>{children}</div>;
 };
 
 /**
- * Panel row. `align: stretch` is what gives every card in a row the same
- * height — the uneven card heights were the main source of the ragged look.
+ * Panel row. `align: stretch` gives every card in a row the same height.
  */
-export const PanelGrid: React.FC<{ children: React.ReactNode; min?: number }> = ({ children, min = 340 }) => (
+export const PanelGrid: React.FC<{ children: React.ReactNode; min?: number }> = ({ children, min = 280 }) => (
   <div style={{
-    display: 'grid', gap: space.xl, alignItems: 'stretch',
+    display: 'grid', gap: space.lg, alignItems: 'stretch',
     gridTemplateColumns: `repeat(auto-fit, minmax(min(${min}px, 100%), 1fr))`,
   }}>
     {children}
@@ -87,7 +96,7 @@ export const PanelGrid: React.FC<{ children: React.ReactNode; min?: number }> = 
 
 /** Two-column working layout: main content beside a narrower rail. */
 export const SplitGrid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="split-grid" style={{ display: 'grid', gap: space.xl, alignItems: 'stretch' }}>
+  <div className="split-grid">
     {children}
   </div>
 );
@@ -99,13 +108,13 @@ export const Surface: React.FC<{
   padding?: number;
   style?: React.CSSProperties;
   onClick?: () => void;
-}> = ({ children, padding = space['2xl'], style, onClick }) => (
+}> = ({ children, padding = space.xl, style, onClick }) => (
   <div
     className="glass-card"
     onClick={onClick}
     style={{
       padding, height: '100%', display: 'flex', flexDirection: 'column',
-      cursor: onClick ? 'pointer' : undefined, ...style,
+      cursor: onClick ? 'pointer' : undefined, boxSizing: 'border-box', ...style,
     }}
   >
     {children}
@@ -125,15 +134,15 @@ export const Panel: React.FC<{
     <Surface>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: space.sm, marginBottom: space.xl,
+        gap: space.sm, marginBottom: space.lg, flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: space.md, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space.md, minWidth: 0, flex: 1 }}>
           {Icon && (
-            <div style={{ padding: 7, borderRadius: radius.sm, background: c.bg, display: 'grid', placeItems: 'center' }}>
-              <Icon size={16} color={c.fg} />
+            <div style={{ padding: 6, borderRadius: radius.sm, background: c.bg, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <Icon size={15} color={c.fg} />
             </div>
           )}
-          <h3 style={{ fontSize: font.sectionTitle, fontWeight: 700, color: colour.text, margin: 0 }}>{title}</h3>
+          <h3 style={{ fontSize: font.sectionTitle, fontWeight: 700, color: colour.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</h3>
         </div>
         {action}
       </div>
@@ -155,23 +164,23 @@ export const KpiCard: React.FC<{
 }> = ({ label, value, icon: Icon, tone = 'primary', hint, onClick, loading }) => {
   const c = toneColour(tone);
   return (
-    <Surface padding={space.xl} onClick={onClick}>
+    <Surface padding={space.lg} onClick={onClick}>
       <div style={{
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        gap: space.sm, marginBottom: space.md,
+        gap: space.xs, marginBottom: space.sm,
       }}>
-        <span style={{ fontSize: font.label, color: colour.muted, fontWeight: 600, lineHeight: 1.4 }}>{label}</span>
+        <span style={{ fontSize: font.label, color: colour.muted, fontWeight: 600, lineHeight: 1.3, minWidth: 0 }}>{label}</span>
         {Icon && (
-          <div style={{ padding: 7, borderRadius: radius.sm, background: c.bg, flexShrink: 0 }}>
-            <Icon size={16} color={c.fg} />
+          <div style={{ padding: 5, borderRadius: radius.sm, background: c.bg, flexShrink: 0 }}>
+            <Icon size={14} color={c.fg} />
           </div>
         )}
       </div>
-      <div style={{ fontSize: font.kpi, fontWeight: 800, color: colour.text, lineHeight: 1.05, marginTop: 'auto' }}>
-        {loading ? <Skeleton width={64} height={36} /> : value}
+      <div style={{ fontSize: font.kpi, fontWeight: 800, color: colour.text, lineHeight: 1.1, marginTop: 'auto' }}>
+        {loading ? <Skeleton width={52} height={28} /> : value}
       </div>
       {hint && (
-        <div style={{ fontSize: font.caption, color: colour.muted, marginTop: space.sm, fontWeight: 500 }}>{hint}</div>
+        <div style={{ fontSize: font.caption, color: colour.muted, marginTop: space.xs, fontWeight: 500 }}>{hint}</div>
       )}
     </Surface>
   );
@@ -268,20 +277,101 @@ export const ListRow: React.FC<{
   </div>
 );
 
-export const EmptyState: React.FC<{ icon?: any; title: string; hint?: string }> = ({ icon: Icon, title, hint }) => (
-  <div style={{
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    padding: `${space['3xl']}px ${space.lg}px`, textAlign: 'center', gap: space.sm, height: '100%',
-  }}>
-    {Icon && (
-      <div style={{ padding: space.md, borderRadius: radius.lg, background: colour.subtle }}>
-        <Icon size={22} color={colour.faint} />
+export interface EmptyStateProps {
+  icon?: any;
+  title: string;
+  subtitle?: string;
+  hint?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+    icon?: any;
+    variant?: ActionVariant;
+  };
+  actionNode?: React.ReactNode;
+  compact?: boolean;
+  style?: React.CSSProperties;
+}
+
+export const EmptyState: React.FC<EmptyStateProps> = ({
+  icon: Icon,
+  title,
+  subtitle,
+  hint,
+  action,
+  actionNode,
+  compact = false,
+  style,
+}) => {
+  const desc = subtitle || hint;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: compact ? `${space.lg}px ${space.md}px` : `${space['3xl']}px ${space.lg}px`,
+        textAlign: 'center',
+        gap: space.sm,
+        height: '100%',
+        width: '100%',
+        boxSizing: 'border-box',
+        ...style,
+      }}
+    >
+      {Icon && (
+        <div
+          style={{
+            padding: compact ? space.sm : space.md,
+            borderRadius: radius.lg,
+            backgroundColor: colour.subtle,
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          <Icon size={compact ? 18 : 24} color={colour.faint} />
+        </div>
+      )}
+      <div style={{ fontSize: compact ? font.label : font.body, fontWeight: 700, color: colour.muted }}>
+        {title}
       </div>
-    )}
-    <div style={{ fontSize: font.body, fontWeight: 700, color: colour.muted }}>{title}</div>
-    {hint && <div style={{ fontSize: font.caption, color: colour.faint, maxWidth: 280 }}>{hint}</div>}
-  </div>
-);
+      {desc && (
+        <div style={{ fontSize: font.caption, color: colour.faint, maxWidth: 360, lineHeight: 1.4 }}>
+          {desc}
+        </div>
+      )}
+      {action && (
+        <div style={{ marginTop: space.sm }}>
+          <button
+            type="button"
+            onClick={action.onClick}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              height: 34,
+              padding: '0 14px',
+              borderRadius: radius.md,
+              backgroundColor: '#0F766E',
+              color: '#FFFFFF',
+              border: 'none',
+              fontSize: font.label,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background-color 0.15s ease',
+            }}
+          >
+            {action.icon && React.createElement(action.icon, { size: 14 })}
+            {action.label}
+          </button>
+        </div>
+      )}
+      {actionNode}
+    </div>
+  );
+};
 
 // ─── Quick actions ────────────────────────────────────────────────────────────
 
@@ -367,6 +457,12 @@ export const MetricRow: React.FC<{ children: React.ReactNode; min?: number }> = 
  * The page header scrolls away; on a phone the main action of a page should
  * stay reachable without scrolling back up.
  */
+/**
+ * Primary action as a floating button on mobile.
+ *
+ * The page header scrolls away; on a phone the main action of a page should
+ * stay reachable without scrolling back up.
+ */
 export const MobileFab: React.FC<{ label: string; icon: any; onClick: () => void }> = ({
   label, icon: Icon, onClick,
 }) => (
@@ -385,6 +481,171 @@ export const MobileFab: React.FC<{ label: string; icon: any; onClick: () => void
     <Icon size={18} />
     {label}
   </button>
+);
+
+/**
+ * Enterprise Wizard Stepper component with progressive step awareness.
+ * Displays completed, current, and upcoming stages clearly across all screens.
+ */
+export interface WizardStep {
+  key?: string | number;
+  title: string;
+  subtitle?: string;
+  icon?: any;
+}
+
+export const WizardStepper: React.FC<{
+  steps: WizardStep[];
+  currentStep: number;
+  onStepClick?: (stepIndex: number) => void;
+}> = ({ steps, currentStep, onStepClick }) => {
+  return (
+    <div style={{ width: '100%', marginBottom: space.lg }}>
+      {/* Desktop / Tablet Stepper */}
+      <div
+        className="desktop-only"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: space.sm,
+          overflowX: 'auto',
+          padding: `${space.xs}px 0`,
+          width: '100%',
+        }}
+      >
+        {steps.map((step, idx) => {
+          const isDone = idx < currentStep;
+          const isCurrent = idx === currentStep;
+          const StepIcon = step.icon;
+
+          return (
+            <React.Fragment key={step.key || idx}>
+              <div
+                onClick={() => isDone && onStepClick?.(idx)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: space.sm,
+                  padding: '8px 14px',
+                  borderRadius: radius.md,
+                  backgroundColor: isCurrent ? colour.primarySoft : isDone ? '#F0FDF4' : colour.canvas,
+                  border: `1px solid ${isCurrent ? colour.primary : isDone ? '#86EFAC' : colour.border}`,
+                  cursor: isDone && onStepClick ? 'pointer' : 'default',
+                  flexShrink: 0,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <div
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: radius.pill,
+                    backgroundColor: isCurrent ? colour.primary : isDone ? '#16A34A' : '#E2E8F0',
+                    color: isCurrent || isDone ? '#FFFFFF' : colour.muted,
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: font.caption,
+                    fontWeight: 800,
+                  }}
+                >
+                  {isDone ? '✓' : idx + 1}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span
+                    style={{
+                      fontSize: font.label,
+                      fontWeight: isCurrent ? 800 : 600,
+                      color: isCurrent ? colour.primary : isDone ? '#166534' : colour.muted,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {step.title}
+                  </span>
+                  {step.subtitle && (
+                    <span style={{ fontSize: 10, color: colour.muted, whiteSpace: 'nowrap' }}>
+                      {step.subtitle}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {idx < steps.length - 1 && (
+                <div
+                  style={{
+                    flex: '1 1 24px',
+                    height: 2,
+                    backgroundColor: isDone ? '#86EFAC' : colour.border,
+                    minWidth: 16,
+                  }}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Mobile Stepper Header */}
+      <div
+        className="mobile-only"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: space.xs,
+          padding: '10px 14px',
+          backgroundColor: colour.primarySoft,
+          borderRadius: radius.md,
+          border: `1px solid ${colour.primary}30`,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: font.caption, color: colour.primary, fontWeight: 800 }}>
+            الخطوة {currentStep + 1} من {steps.length}
+          </span>
+          <span style={{ fontSize: font.caption, color: colour.muted }}>
+            {Math.round(((currentStep + 1) / steps.length) * 100)}% مكتمل
+          </span>
+        </div>
+        <div style={{ fontSize: font.body, fontWeight: 800, color: colour.text }}>
+          {steps[currentStep]?.title}
+        </div>
+        {steps[currentStep]?.subtitle && (
+          <div style={{ fontSize: font.caption, color: colour.muted }}>
+            {steps[currentStep]?.subtitle}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Sticky Action Bar for Mobile Viewports with iOS Safe Area Insets.
+ */
+export const StickyActionBar: React.FC<{
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}> = ({ children, style }) => (
+  <div
+    style={{
+      position: 'sticky',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+      backdropFilter: 'blur(8px)',
+      borderTop: '1px solid #E2E8F0',
+      padding: '10px 16px',
+      paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: space.sm,
+      boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
+      ...style,
+    }}
+  >
+    {children}
+  </div>
 );
 
 export { Tooltip };

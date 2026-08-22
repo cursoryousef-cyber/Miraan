@@ -507,38 +507,40 @@ export const CallsHub: React.FC = () => {
           {/* Diligence Leaderboard */}
           {(diligenceData ?? []).length > 0 && (
             <Panel title="مؤشر الحرص — ترتيب المتدربين" icon={TrendingUp} tone="success">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: space.sm }}>
-                {(diligenceData ?? []).slice(0, 10).map((d: any, idx: number) => (
-                  <div key={d.traineeProfileId} style={{
-                    display: 'grid', gridTemplateColumns: '28px 1fr 80px 80px 80px 140px',
-                    alignItems: 'center', gap: space.md, padding: `${space.sm}px ${space.md}px`,
-                    background: idx === 0 ? colour.primarySoft : colour.canvas,
-                    borderRadius: radius.sm, border: `1px solid ${idx === 0 ? colour.primary : colour.border}`,
-                  }}>
-                    <span style={{ fontSize: font.body, color: idx < 3 ? colour.primary : colour.muted, fontWeight: 800 }}>#{idx + 1}</span>
-                    <span style={{ fontWeight: 700, color: colour.text }}>{d.nameAr}</span>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: font.caption, color: colour.muted }}>أكّد</div>
-                      <div style={{ fontSize: font.label, fontWeight: 700, color: colour.warning }}>{d.ackRate}%</div>
+              <div className="table-scroll" style={{ width: '100%', overflowX: 'auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: space.sm, minWidth: 520 }}>
+                  {(diligenceData ?? []).slice(0, 10).map((d: any, idx: number) => (
+                    <div key={d.traineeProfileId} style={{
+                      display: 'grid', gridTemplateColumns: '28px 1fr 70px 70px 70px 120px',
+                      alignItems: 'center', gap: space.md, padding: `${space.sm}px ${space.md}px`,
+                      background: idx === 0 ? colour.primarySoft : colour.canvas,
+                      borderRadius: radius.sm, border: `1px solid ${idx === 0 ? colour.primary : colour.border}`,
+                    }}>
+                      <span style={{ fontSize: font.body, color: idx < 3 ? colour.primary : colour.muted, fontWeight: 800 }}>#{idx + 1}</span>
+                      <span style={{ fontWeight: 700, color: colour.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.nameAr}</span>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: font.caption, color: colour.muted }}>أكّد</div>
+                        <div style={{ fontSize: font.label, fontWeight: 700, color: colour.warning }}>{d.ackRate}%</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: font.caption, color: colour.muted }}>حضر</div>
+                        <div style={{ fontSize: font.label, fontWeight: 700, color: colour.info }}>{d.arrivalRate}%</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: font.caption, color: colour.muted }}>نداءات</div>
+                        <div style={{ fontSize: font.label, fontWeight: 700, color: colour.muted }}>{d.totalCalls}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <StatBar
+                          label=""
+                          value={d.diligenceScore}
+                          max={100}
+                          tone={d.diligenceScore >= 80 ? 'success' : d.diligenceScore >= 50 ? 'warning' : 'danger'}
+                        />
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: font.caption, color: colour.muted }}>حضر</div>
-                      <div style={{ fontSize: font.label, fontWeight: 700, color: colour.info }}>{d.arrivalRate}%</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: font.caption, color: colour.muted }}>نداءات</div>
-                      <div style={{ fontSize: font.label, fontWeight: 700, color: colour.muted }}>{d.totalCalls}</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <StatBar
-                        label=""
-                        value={d.diligenceScore}
-                        max={100}
-                        tone={d.diligenceScore >= 80 ? 'success' : d.diligenceScore >= 50 ? 'warning' : 'danger'}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </Panel>
           )}

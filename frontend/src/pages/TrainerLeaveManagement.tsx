@@ -239,8 +239,8 @@ export const TrainerLeaveManagement: React.FC = () => {
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: 60 }}><CircularProgress /></div>
       ) : (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div className="table-scroll" style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflowX: 'auto', width: '100%' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
                 <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#475569' }}>المدرب</th>
