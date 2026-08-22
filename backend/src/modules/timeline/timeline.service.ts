@@ -569,6 +569,16 @@ export class TimelineService {
         return {
           ...base,
           deletedAt: null,
+          // organizationId falls back to the parent TrainingRequest's
+          // targetOrgId at cluster-approval time (see
+          // training-request-trainees.service.ts), which for a cluster_request
+          // is already the target hospital — so a trainee can match the
+          // `organizationId` branch below before ever being allocated to this
+          // hospital. Excluding `cluster_approved` here keeps the hospital's
+          // trainee count to those actually placed (allocated onward), not
+          // merely earmarked. Profiles with no linked row (legacy/manual data)
+          // have no trainingRequestRow to match, so NOT correctly keeps them.
+          NOT: { trainingRequestRow: { status: 'cluster_approved' } },
           OR: [
             { organizationId: params.organizationId },
             {

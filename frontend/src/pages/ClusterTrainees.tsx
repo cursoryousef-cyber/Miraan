@@ -28,6 +28,13 @@ import {
   XCircle,
   Clock,
   Sparkles,
+  KeyRound,
+  Key,
+  Lock,
+  Eye,
+  EyeOff,
+  UserCog,
+  GraduationCap,
 } from 'lucide-react';
 import {
   Button,
@@ -54,6 +61,11 @@ import {
   Grid,
   LinearProgress,
   Tooltip,
+  Tabs,
+  Tab,
+  Box,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 
@@ -64,7 +76,9 @@ export const ClusterTrainees: React.FC = () => {
   const [search, setSearch] = useState('');
   const [hospitalFilter, setHospitalFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [accountStatusFilter, setAccountStatusFilter] = useState('ALL');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activeMainTab, setActiveMainTab] = useState<'roster' | 'accounts'>('roster');
 
   // Modals state
   const [openImportModal, setOpenImportModal] = useState(false);
@@ -72,6 +86,15 @@ export const ClusterTrainees: React.FC = () => {
   const [openReallocModal, setOpenReallocModal] = useState(false);
   const [openAutoModal, setOpenAutoModal] = useState(false);
   const [selectedTraineeForRealloc, setSelectedTraineeForRealloc] = useState<any>(null);
+
+  // Administrative Password Change Modal State
+  const [openPasswordModal, setOpenPasswordModal] = useState(false);
+  const [selectedTraineeForPassword, setSelectedTraineeForPassword] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Form states for reallocation
   const [targetHospitalId, setTargetHospitalId] = useState('');
@@ -89,6 +112,176 @@ export const ClusterTrainees: React.FC = () => {
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [validationErrors, setValidationErrors] = useState<any[]>([]);
   const [validCount, setValidCount] = useState(0);
+
+  // Mutation for administrative change password
+  const changePasswordMutation = useMutation({
+    mutationFn: async ({ traineeId, password }: { traineeId: string; password: string }) => {
+      const res = await apiClient.patch(`/trainees/${traineeId}/password`, { password });
+      return res.data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['incoming-trainees'] });
+      setSuccessMsg(data?.message || 'تم تغيير كلمة المرور بنجاح');
+      setOpenPasswordModal(false);
+      setSelectedTraineeForPassword(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordError(null);
+    },
+    onError: (err: any) => {
+      setPasswordError(err.response?.data?.message || err.message || 'تعذّر تغيير كلمة المرور');
+    },
+  });
+
+  const handleOpenPasswordModal = (trainee: any) => {
+    setSelectedTraineeForPassword(trainee);
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setPasswordError(null);
+    setOpenPasswordModal(true);
+  };
+
+  const handleSavePassword = () => {
+    if (!newPassword || newPassword.trim().length < 8) {
+      setPasswordError('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('كلمتا المرور غير متطابقتين');
+      return;
+    }
+    if (!selectedTraineeForPassword?.id) {
+      setPasswordError('تعذر تحديد المتدرب');
+      return;
+    }
+    setPasswordError(null);
+    changePasswordMutation.mutate({
+      traineeId: selectedTraineeForPassword.id,
+      password: newPassword,
+    });
+  };
+
+  const formatDateTime = (val: string | Date | null | undefined) => {
+    if (!val) return 'لم يسجل دخول بعد';
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleDateString('ar-SA', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return String(val).slice(0, 16);
+    }
+  };
+
+  const formatDateOnly = (val: string | Date | null | undefined) => {
+    if (!val) return '—';
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleDateString('ar-SA', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return String(val).slice(0, 10);
+    }
+  };
+
+  const renderAccountStatusChip = (t: any) => {
+    const account = t.person?.userAccounts?.[0];
+    if (!account) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 10px',
+            borderRadius: '8px',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            backgroundColor: '#F1F5F9',
+            color: '#64748B',
+            border: '1px solid #CBD5E1',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          غير منشأ بعد
+        </span>
+      );
+    }
+    if (!account.isActive) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 10px',
+            borderRadius: '8px',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            backgroundColor: '#FEE2E2',
+            color: '#B91C1C',
+            border: '1px solid #FCA5A5',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          موقوف
+        </span>
+      );
+    }
+    if (account.activatedAt || !account.activationToken) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 10px',
+            borderRadius: '8px',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            backgroundColor: '#D1FAE5',
+            color: '#047857',
+            border: '1px solid #6EE7B7',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <CheckCircle2 size={12} />
+          مفعل
+        </span>
+      );
+    }
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '4px 10px',
+          borderRadius: '8px',
+          fontSize: '11.5px',
+          fontWeight: 700,
+          backgroundColor: '#FEF3C7',
+          color: '#D97706',
+          border: '1px solid #FCD34D',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <Clock size={12} />
+        غير مفعل
+      </span>
+    );
+  };
 
   // 1. Load incoming trainees list
   const { data: traineesData, isLoading: isLoadingTrainees, refetch: refetchTrainees } = useQuery({
@@ -313,11 +506,23 @@ export const ClusterTrainees: React.FC = () => {
   const clusterCapacity = cards.reduce((s: number, h: any) => s + (h.capacity ?? h.totalCapacity ?? 0), 0);
   const clusterOccupied = cards.reduce((s: number, h: any) => s + (h.occupied ?? h.accepted ?? 0), 0);
   const clusterPct = clusterCapacity > 0 ? Math.round((clusterOccupied / clusterCapacity) * 100) : 0;
-  const unassigned = traineesList.filter((t: any) => !t.assignedHospitalId && !t.organization?.id).length;
+  // `t.assignedHospitalId` never existed on TraineeProfile (dead condition —
+  // always undefined), and `t.organization?.id` is unreliable on its own:
+  // right after cluster approval, TraineeProfile.organizationId falls back to
+  // the *cluster's* org id (not a hospital) until a real hospital allocation
+  // happens, so it reads as "assigned" even though no hospital has been
+  // chosen yet. The row's own assignedHospitalId is the actual signal.
+  const unassigned = traineesList.filter((t: any) => !t.trainingRequestRow?.assignedHospitalId).length;
 
-  // Status mapping to localized Arabic terms with appropriate colors
+  // Status mapping to localized Arabic terms with appropriate colors.
+  // t.trainingRequestRow.status is the live pipeline stage (allocated →
+  // hospital_review → hospital_accepted → active); t.applicationStatus is a
+  // snapshot stamped once at cluster-approval time and never advances past
+  // "approved" after that, so it must never take priority when the live
+  // status is available — preferring it here previously showed every
+  // trainee as "معتمد" regardless of actual hospital-review progress.
   const statusChip = (t: any) => {
-    const rawStatus = (t?.applicationStatus || t?.status || 'draft').toLowerCase();
+    const rawStatus = (t?.trainingRequestRow?.status || t?.applicationStatus || t?.status || 'draft').toLowerCase();
     const map: Record<string, { label: String; bg: string; color: string; border: string }> = {
       draft: { label: 'مسودة', bg: '#F1F5F9', color: '#475569', border: '#CBD5E1' },
       pending_acceptance: { label: 'بانتظار القبول', bg: '#FEF3C7', color: '#D97706', border: '#FCD34D' },
@@ -326,8 +531,11 @@ export const ClusterTrainees: React.FC = () => {
       submitted: { label: 'مرفوع للتجمع', bg: '#E0F2FE', color: '#0369A1', border: '#7DD3FC' },
       documents_requested: { label: 'طُلبت المستندات', bg: '#FEF3C7', color: '#D97706', border: '#FCD34D' },
       approved: { label: 'معتمد', bg: '#D1FAE5', color: '#047857', border: '#6EE7B7' },
+      cluster_approved: { label: 'معتمد من التجمع', bg: '#D1FAE5', color: '#047857', border: '#6EE7B7' },
       allocated: { label: 'موزع', bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' },
       auto_allocated: { label: 'موزع تلقائياً', bg: '#CCFBF1', color: '#0F766E', border: '#5EEAD4' },
+      hospital_review: { label: 'قيد مراجعة المستشفى', bg: '#FFEDD5', color: '#C2410C', border: '#FDBA74' },
+      hospital_accepted: { label: 'مقبول من المستشفى', bg: '#D1FAE5', color: '#047857', border: '#6EE7B7' },
       returned_to_cluster: { label: 'مُعاد للتجمع', bg: '#FFEDD5', color: '#C2410C', border: '#FDBA74' },
       active: { label: 'نشط', bg: '#D1FAE5', color: '#047857', border: '#6EE7B7' },
       rejected: { label: 'مرفوض', bg: '#FEE2E2', color: '#B91C1C', border: '#FCA5A5' },
@@ -362,7 +570,7 @@ export const ClusterTrainees: React.FC = () => {
     );
   };
 
-  // Filter logic
+  // Filter logic for Main Roster
   const filteredTrainees = traineesList.filter((t: any) => {
     const matchesSearch =
       (t.person?.nameAr || '').includes(search) ||
@@ -383,59 +591,96 @@ export const ClusterTrainees: React.FC = () => {
     return matchesSearch && matchesHospital && matchesStatus;
   });
 
+  // Filter logic for Trainee Accounts Management Tab
+  const filteredAccountTrainees = traineesList.filter((t: any) => {
+    const account = t.person?.userAccounts?.[0];
+    const username = account?.username || t.person?.nationalId || '';
+    const email = account?.email || t.person?.email || '';
+    const nameAr = t.person?.nameAr || '';
+    const nationalId = t.person?.nationalId || '';
+    const hospitalName = t.organization?.nameAr || t.assignedHospitalName || '';
+
+    const matchesSearch =
+      nameAr.includes(search) ||
+      nationalId.includes(search) ||
+      username.includes(search) ||
+      email.includes(search) ||
+      hospitalName.includes(search);
+
+    const matchesHospital =
+      hospitalFilter === 'ALL' ||
+      (hospitalFilter === 'UNASSIGNED' && !t.assignedHospitalId && !t.organization?.id) ||
+      t.assignedHospitalId === hospitalFilter ||
+      t.organization?.id === hospitalFilter;
+
+    let matchesAccountStatus = true;
+    if (accountStatusFilter === 'ACTIVE') {
+      matchesAccountStatus = Boolean(account && account.isActive && (account.activatedAt || !account.activationToken));
+    } else if (accountStatusFilter === 'PENDING') {
+      matchesAccountStatus = Boolean(account && account.isActive && !account.activatedAt && account.activationToken);
+    } else if (accountStatusFilter === 'SUSPENDED') {
+      matchesAccountStatus = Boolean(account && !account.isActive);
+    }
+
+    return matchesSearch && matchesHospital && matchesAccountStatus;
+  });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
       {/* 1. Operational Header Banner */}
       <div
         style={{
           background: 'linear-gradient(135deg, #0F766E 0%, #115E59 100%)',
-          borderRadius: '16px',
-          padding: '24px 28px',
+          borderRadius: '14px',
+          padding: '18px 20px',
           color: '#FFFFFF',
           boxShadow: '0 10px 25px -5px rgba(15, 118, 110, 0.25)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '16px',
+          gap: '14px',
+          width: '100%',
+          boxSizing: 'border-box',
         }}
       >
-        <div style={{ minWidth: '300px', flex: '1' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+        <div style={{ minWidth: 0, flex: '1 1 280px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
             <span
               style={{
                 background: 'rgba(255, 255, 255, 0.2)',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                fontSize: '12px',
+                padding: '3px 8px',
+                borderRadius: '16px',
+                fontSize: '11.5px',
                 fontWeight: 700,
               }}
             >
               {user?.activeOrganization?.nameAr || 'التجمع الصحي'}
             </span>
-            <span style={{ fontSize: '12px', color: '#99F6E4' }}>• لوحة التحكم التشغيلية للتوزيع</span>
+            <span style={{ fontSize: '11.5px', color: '#99F6E4' }}>• لوحة التحكم التشغيلية للتوزيع</span>
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, margin: 0, lineHeight: 1.3 }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, margin: 0, lineHeight: 1.3 }}>
             توزيع متدربي الامتياز والطاقة الاستيعابية للمستشفيات
           </h1>
-          <p style={{ fontSize: '13px', color: '#CCFBF1', margin: '6px 0 0', opacity: 0.9 }}>
+          <p style={{ fontSize: '12.5px', color: '#CCFBF1', margin: '4px 0 0', opacity: 0.9, lineHeight: 1.4 }}>
             إدارة توزيع الأطباء المتدربين، التوزيع الآلي الذكي، متابعة إشغال الأقسام ونقل الأعمال الميدانية.
           </p>
         </div>
 
         {/* Header Actions */}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <Button
             variant="contained"
-            startIcon={<Zap size={18} />}
+            size="small"
+            startIcon={<Zap size={16} />}
             onClick={() => setOpenAutoModal(true)}
             style={{
               backgroundColor: '#10B981',
               color: '#FFFFFF',
               fontWeight: 800,
-              borderRadius: '10px',
-              padding: '10px 18px',
-              fontSize: '13px',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              fontSize: '12.5px',
               boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
             }}
           >
@@ -444,15 +689,16 @@ export const ClusterTrainees: React.FC = () => {
 
           <Button
             variant="outlined"
-            startIcon={<Download size={18} />}
+            size="small"
+            startIcon={<Download size={16} />}
             onClick={handleDownloadTemplate}
             style={{
               borderColor: 'rgba(255, 255, 255, 0.4)',
               color: '#FFFFFF',
               fontWeight: 700,
-              borderRadius: '10px',
-              padding: '10px 16px',
-              fontSize: '13px',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              fontSize: '12.5px',
               backgroundColor: 'rgba(255, 255, 255, 0.08)',
             }}
           >
@@ -462,15 +708,16 @@ export const ClusterTrainees: React.FC = () => {
           {hasAnyRole(['cluster_administrator', 'training_director', 'platform_owner']) && (
             <Button
               variant="contained"
+              size="small"
               component="label"
-              startIcon={<Upload size={18} />}
+              startIcon={<Upload size={16} />}
               style={{
                 backgroundColor: '#0D9488',
                 color: '#FFFFFF',
                 fontWeight: 800,
-                borderRadius: '10px',
-                padding: '10px 18px',
-                fontSize: '13px',
+                borderRadius: '8px',
+                padding: '8px 14px',
+                fontSize: '12.5px',
               }}
             >
               استيراد دفعة
@@ -496,23 +743,23 @@ export const ClusterTrainees: React.FC = () => {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))',
+          gap: '12px',
           width: '100%',
         }}
       >
         {/* KPI 1 */}
         <div
           className="glass-card"
-          style={{ padding: '18px 20px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+          style={{ padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>المتدربون الواردون</span>
-            <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#F0FDFA', color: '#0F766E' }}>
-              <Users size={18} />
+            <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#F0FDFA', color: '#0F766E' }}>
+              <Users size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A' }}>{traineesList.length}</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{traineesList.length}</div>
           <div style={{ fontSize: '11px', color: '#94A3B8' }}>إجمالي أطباء الامتياز المسجلين</div>
         </div>
 
@@ -520,102 +767,104 @@ export const ClusterTrainees: React.FC = () => {
         <div
           className="glass-card"
           style={{
-            padding: '18px 20px',
-            borderRadius: '14px',
+            padding: '16px',
+            borderRadius: '12px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
+            gap: '6px',
             borderColor: unassigned > 0 ? '#FDE68A' : '#E2E8F0',
             backgroundColor: unassigned > 0 ? '#FFFBEB' : '#FFFFFF',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: unassigned > 0 ? '#B45309' : '#64748B' }}>
-              بانتظار الإسناد
+              بانتظار التوزيع
             </span>
             <div
               style={{
-                padding: '8px',
-                borderRadius: '10px',
+                padding: '6px',
+                borderRadius: '8px',
                 backgroundColor: unassigned > 0 ? '#FEF3C7' : '#F1F5F9',
                 color: unassigned > 0 ? '#D97706' : '#64748B',
               }}
             >
-              <UserPlus size={18} />
+              <Clock size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: unassigned > 0 ? '#D97706' : '#0F172A' }}>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: unassigned > 0 ? '#B45309' : '#0F172A' }}>
             {unassigned}
           </div>
-          <div style={{ fontSize: '11px', color: unassigned > 0 ? '#B45309' : '#94A3B8' }}>
-            {unassigned > 0 ? 'يتطلب إجراء توزيع' : 'جميعهم موزعون بنجاح'}
+          <div style={{ fontSize: '11px', color: unassigned > 0 ? '#D97706' : '#94A3B8' }}>
+            متدرب لم يسكن بمستشفى بعد
           </div>
         </div>
 
         {/* KPI 3 */}
         <div
           className="glass-card"
-          style={{ padding: '18px 20px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+          style={{ padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>المستشفيات التابعة</span>
-            <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#F0F9FF', color: '#0284C7' }}>
-              <Building2 size={18} />
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>تم تسكينهم وتوزيعهم</span>
+            <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#ECFDF5', color: '#059669' }}>
+              <CheckCircle2 size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A' }}>{cards.length}</div>
-          <div style={{ fontSize: '11px', color: '#94A3B8' }}>المراكز والمستشفيات المعتمدة</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>
+            {traineesList.length - unassigned}
+          </div>
+          <div style={{ fontSize: '11px', color: '#94A3B8' }}>مرتبطون بمستشفيات وأقسام</div>
         </div>
 
         {/* KPI 4 */}
         <div
           className="glass-card"
-          style={{ padding: '18px 20px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+          style={{ padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>الطاقة الاستيعابية</span>
-            <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#F1F5F9', color: '#475569' }}>
-              <BedDouble size={18} />
+            <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#F1F5F9', color: '#475569' }}>
+              <BedDouble size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A' }}>{clusterCapacity}</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{clusterCapacity}</div>
           <div style={{ fontSize: '11px', color: '#94A3B8' }}>إجمالي المقاعد المتاحة بالتجمع</div>
         </div>
 
         {/* KPI 5 */}
         <div
           className="glass-card"
-          style={{ padding: '18px 20px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+          style={{ padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>نسبة الإشغال الكلية</span>
             <div
               style={{
-                padding: '8px',
-                borderRadius: '10px',
+                padding: '6px',
+                borderRadius: '8px',
                 backgroundColor: clusterPct >= 90 ? '#FEE2E2' : clusterPct >= 70 ? '#FEF3C7' : '#ECFDF5',
                 color: clusterPct >= 90 ? '#DC2626' : clusterPct >= 70 ? '#D97706' : '#059669',
               }}
             >
-              <Gauge size={18} />
+              <Gauge size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A' }}>{clusterPct}%</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{clusterPct}%</div>
           <div style={{ fontSize: '11px', color: '#94A3B8' }}>المشغول: {clusterOccupied} مقعد</div>
         </div>
 
         {/* KPI 6 */}
         <div
           className="glass-card"
-          style={{ padding: '18px 20px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+          style={{ padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B' }}>الطلبات الواردة</span>
-            <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#F5F3FF', color: '#7C3AED' }}>
-              <FolderGit2 size={18} />
+            <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#F5F3FF', color: '#7C3AED' }}>
+              <FolderGit2 size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A' }}>{requestsList.length}</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{requestsList.length}</div>
           <div style={{ fontSize: '11px', color: '#94A3B8' }}>كشوفات الدفعات المرفوعة</div>
         </div>
       </div>
@@ -626,21 +875,23 @@ export const ClusterTrainees: React.FC = () => {
           style={{
             backgroundColor: '#FFFBEB',
             border: '1px solid #FCD34D',
-            borderRadius: '14px',
-            padding: '16px 20px',
+            borderRadius: '12px',
+            padding: '14px 16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '16px',
+            gap: '12px',
             flexWrap: 'wrap',
+            width: '100%',
+            boxSizing: 'border-box',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
             <div
               style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
                 backgroundColor: '#FEF3C7',
                 display: 'grid',
                 placeItems: 'center',
@@ -648,13 +899,13 @@ export const ClusterTrainees: React.FC = () => {
                 flexShrink: 0,
               }}
             >
-              <AlertTriangle size={22} />
+              <AlertTriangle size={20} />
             </div>
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: '#92400E' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#92400E' }}>
                 يتطلب الإنتباه: يوجد {unassigned} متدرب بانتظار التوزيع والربط بالمستشفيات
               </div>
-              <div style={{ fontSize: '12px', color: '#B45309', marginTop: '2px' }}>
+              <div style={{ fontSize: '11.5px', color: '#B45309', marginTop: '2px' }}>
                 يمكنك بدء التوزيع الآلي بنقرة واحدة لتسكين المتدربين على المقاعد والمستشفيات الشاغرة.
               </div>
             </div>
@@ -678,6 +929,35 @@ export const ClusterTrainees: React.FC = () => {
         </div>
       )}
 
+      {/* 4. Section Navigation Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: '#E2E8F0', marginTop: '8px' }}>
+        <Tabs
+          value={activeMainTab}
+          onChange={(_, val) => setActiveMainTab(val)}
+          sx={{
+            '& .MuiTab-root': { color: '#64748B', fontWeight: 800, fontSize: '14px', minHeight: 48 },
+            '& .Mui-selected': { color: '#0F766E !important' },
+            '& .MuiTabs-indicator': { backgroundColor: '#0F766E', height: 3 },
+          }}
+        >
+          <Tab
+            value="roster"
+            label="توزيع وتسكين المتدربين (Allocation & Capacity)"
+            icon={<GraduationCap size={18} />}
+            iconPosition="start"
+          />
+          <Tab
+            value="accounts"
+            label="إدارة حسابات المتدربين (Trainee Accounts Management)"
+            icon={<KeyRound size={18} />}
+            iconPosition="start"
+          />
+        </Tabs>
+      </Box>
+
+      {/* 4B. Main Roster & Capacity Views (Tab 1) */}
+      {activeMainTab === 'roster' && (
+      <>
       {/* 4. Hospital Capacity Live Dashboard Cards Section */}
       <div className="glass-card" style={{ padding: '22px 24px', borderRadius: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
@@ -881,19 +1161,19 @@ export const ClusterTrainees: React.FC = () => {
           </div>
 
           {/* Search & Dropdown Filters Row */}
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', width: '100%' }}>
             <TextField
               placeholder="البحث باسم المتدرب، الرقم الأكاديمي، أو رقم الهوية..."
               size="small"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ flex: '1 1 280px', minWidth: '240px' }}
+              sx={{ flex: '1 1 220px', minWidth: { xs: '100%', sm: 200 } }}
               InputProps={{
                 startAdornment: <Search size={16} color="#94A3B8" style={{ marginLeft: '8px' }} />,
               }}
             />
 
-            <FormControl size="small" style={{ minWidth: '180px' }}>
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 160 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
               <InputLabel>تصفية حسب المستشفى</InputLabel>
               <Select
                 value={hospitalFilter}
@@ -910,7 +1190,7 @@ export const ClusterTrainees: React.FC = () => {
               </Select>
             </FormControl>
 
-            <FormControl size="small" style={{ minWidth: '160px' }}>
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
               <InputLabel>تصفية حسب الحالة</InputLabel>
               <Select
                 value={statusFilter}
@@ -1051,22 +1331,44 @@ export const ClusterTrainees: React.FC = () => {
                       <TableCell>{statusChip(t)}</TableCell>
 
                       <TableCell align="center">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<ArrowRightLeft size={13} />}
-                          onClick={() => handleOpenRealloc(t)}
-                          style={{
-                            fontSize: '11.5px',
-                            fontWeight: 700,
-                            padding: '3px 10px',
-                            borderRadius: '8px',
-                            borderColor: '#0F766E',
-                            color: '#0F766E',
-                          }}
-                        >
-                          تعديل التوجيه
-                        </Button>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ArrowRightLeft size={13} />}
+                            onClick={() => handleOpenRealloc(t)}
+                            style={{
+                              fontSize: '11.5px',
+                              fontWeight: 700,
+                              padding: '3px 10px',
+                              borderRadius: '8px',
+                              borderColor: '#0F766E',
+                              color: '#0F766E',
+                            }}
+                          >
+                            تعديل التوجيه
+                          </Button>
+                          {hasAnyRole(['hospital_training_admin']) && (
+                            <Tooltip title="تعديل كلمة مرور حساب المتدرب">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<KeyRound size={13} />}
+                                onClick={() => handleOpenPasswordModal(t)}
+                                style={{
+                                  fontSize: '11.5px',
+                                  fontWeight: 700,
+                                  padding: '3px 10px',
+                                  borderRadius: '8px',
+                                  borderColor: '#0284C7',
+                                  color: '#0284C7',
+                                }}
+                              >
+                                كلمة المرور
+                              </Button>
+                            </Tooltip>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -1082,6 +1384,255 @@ export const ClusterTrainees: React.FC = () => {
           </Table>
         </TableContainer>
       </div>
+      </>
+      )}
+
+      {/* 5B. Trainee Accounts Management View (Tab 2) */}
+      {activeMainTab === 'accounts' && (
+        <div className="glass-card" style={{ borderRadius: '16px', overflow: 'hidden' }}>
+          {/* Controls Toolbar for Accounts */}
+          <div
+            style={{
+              padding: '18px 24px',
+              backgroundColor: '#FFFFFF',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <KeyRound size={20} color="#0F766E" />
+                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  حسابات دخول المتدربين المنشأة في المنصة ({filteredAccountTrainees.length} حساب)
+                </h3>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<RefreshCw size={14} />}
+                  onClick={() => refetchTrainees()}
+                  style={{ fontSize: '12px', fontWeight: 700, borderColor: '#CBD5E1', color: '#475569' }}
+                >
+                  تحديث
+                </Button>
+              </div>
+            </div>
+
+            {/* Search & Filters */}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', width: '100%' }}>
+              <TextField
+                placeholder="البحث بالاسم، الهوية، Username، أو البريد الإلكتروني..."
+                size="small"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                sx={{ flex: '1 1 220px', minWidth: { xs: '100%', sm: 200 } }}
+                InputProps={{
+                  startAdornment: <Search size={16} color="#94A3B8" style={{ marginLeft: '8px' }} />,
+                }}
+              />
+
+              <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 160 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
+                <InputLabel>المستشفى / الجهة</InputLabel>
+                <Select
+                  value={hospitalFilter}
+                  label="المستشفى / الجهة"
+                  onChange={(e) => setHospitalFilter(e.target.value)}
+                >
+                  <MenuItem value="ALL">جميع المستشفيات</MenuItem>
+                  <MenuItem value="UNASSIGNED">غير موجه (بدون مستشفى)</MenuItem>
+                  {hospitalsList.map((h: any) => (
+                    <MenuItem key={h.id} value={h.id}>
+                      {h.nameAr}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 }, flex: { xs: '1 1 100%', sm: '1 1 auto' } }}>
+                <InputLabel>حالة الحساب</InputLabel>
+                <Select
+                  value={accountStatusFilter}
+                  label="حالة الحساب"
+                  onChange={(e) => setAccountStatusFilter(e.target.value)}
+                >
+                  <MenuItem value="ALL">جميع الحالات</MenuItem>
+                  <MenuItem value="ACTIVE">مفعل</MenuItem>
+                  <MenuItem value="PENDING">غير مفعل (بانتظار التفعيل)</MenuItem>
+                  <MenuItem value="SUSPENDED">موقوف</MenuItem>
+                </Select>
+              </FormControl>
+            </div>
+          </div>
+
+          {/* Accounts Table */}
+          <TableContainer style={{ maxHeight: '600px' }}>
+            <Table stickyHeader size="medium">
+              <TableHead>
+                <TableRow style={{ backgroundColor: '#F8FAFC' }}>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    اسم المتدرب
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    رقم الهوية الوطنية
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    Username
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    البريد الإلكتروني
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    المستشفى / الجهة
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    حالة الحساب
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    تاريخ إنشاء الحساب
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px' }}>
+                    آخر دخول
+                  </TableCell>
+                  <TableCell style={{ color: '#475569', fontWeight: 800, backgroundColor: '#F8FAFC', fontSize: '12.5px', textAlign: 'center' }}>
+                    الإجراءات
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isLoadingTrainees ? (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center" style={{ padding: '32px' }}>
+                      <CircularProgress size={24} style={{ color: '#0F766E' }} />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredAccountTrainees.length > 0 ? (
+                  filteredAccountTrainees.map((t: any) => {
+                    const account = t.person?.userAccounts?.[0];
+                    const username = account?.username || t.person?.nationalId || '—';
+                    const email = account?.email || t.person?.email || '—';
+                    const hospName = t.organization?.nameAr || t.assignedHospitalName || 'غير مسند';
+
+                    return (
+                      <TableRow key={t.id} hover style={{ transition: 'background 0.15s ease' }}>
+                        <TableCell>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div
+                              style={{
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '50%',
+                                backgroundColor: '#F0FDFA',
+                                color: '#0F766E',
+                                display: 'grid',
+                                placeItems: 'center',
+                                fontWeight: 800,
+                                fontSize: '13px',
+                                border: '1px solid #99F6E4',
+                              }}
+                            >
+                              {t.person?.nameAr ? t.person.nameAr.charAt(0) : 'م'}
+                            </div>
+                            <div>
+                              <div style={{ color: '#0F172A', fontWeight: 800, fontSize: '13.5px' }}>
+                                {t.person?.nameAr || '—'}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748B' }}>
+                                {t.specialtyAr || t.program?.specialty || 'طب وجراحة عامة'}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <div style={{ fontFamily: 'monospace', fontWeight: 800, color: '#0F766E', fontSize: '13px' }}>
+                            {t.person?.nationalId || '—'}
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0284C7', fontSize: '12.5px' }}>
+                            {username}
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <div style={{ color: '#475569', fontSize: '12.5px', direction: 'ltr', textAlign: 'right' }}>
+                            {email}
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              color: hospName === 'غير مسند' ? '#D97706' : '#0F766E',
+                              fontSize: '12.5px',
+                            }}
+                          >
+                            {hospName}
+                          </span>
+                        </TableCell>
+
+                        <TableCell>{renderAccountStatusChip(t)}</TableCell>
+
+                        <TableCell style={{ color: '#64748B', fontSize: '12px' }}>
+                          {formatDateOnly(account?.createdAt || t.createdAt)}
+                        </TableCell>
+
+                        <TableCell style={{ color: '#64748B', fontSize: '12px' }}>
+                          {formatDateTime(account?.lastLoginAt)}
+                        </TableCell>
+
+                        <TableCell align="center">
+                          {hasAnyRole(['hospital_training_admin']) ? (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<KeyRound size={14} />}
+                              onClick={() => handleOpenPasswordModal(t)}
+                              style={{
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                padding: '4px 12px',
+                                borderRadius: '8px',
+                                backgroundColor: '#0F766E',
+                                color: '#FFFFFF',
+                                boxShadow: '0 2px 6px rgba(15, 118, 110, 0.2)',
+                              }}
+                            >
+                              تعديل كلمة المرور
+                            </Button>
+                          ) : (
+                            <span style={{ fontSize: '11.5px', color: '#94A3B8' }}>—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center" style={{ color: '#64748B', padding: '40px' }}>
+                      لا توجد حسابات متدربين مطابقة لخيارات البحث الحالية
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </div>
+      )}
 
       {/* Modal 1: Smart Auto Allocation Modal */}
       <Dialog open={openAutoModal} onClose={() => setOpenAutoModal(false)} maxWidth="sm" fullWidth>
@@ -1357,6 +1908,176 @@ export const ClusterTrainees: React.FC = () => {
             ) : (
               `تأكيد استيراد وإنشاء (${validCount}) حساب متدرب`
             )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal: Administrative Password Change Modal */}
+      <Dialog
+        open={openPasswordModal}
+        onClose={() => {
+          setOpenPasswordModal(false);
+          setSelectedTraineeForPassword(null);
+          setNewPassword('');
+          setConfirmPassword('');
+          setPasswordError(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <KeyRound size={20} color="#0F766E" />
+          تعديل كلمة مرور المتدرب إدارياً
+        </DialogTitle>
+        <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '16px' }}>
+          {selectedTraineeForPassword && (
+            <div
+              style={{
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
+                  {selectedTraineeForPassword.person?.nameAr || 'المتدرب'}
+                </span>
+                <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#0F766E', fontWeight: 700 }}>
+                  ID: {selectedTraineeForPassword.person?.nationalId || '—'}
+                </span>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                اسم المستخدم (Username):{' '}
+                <strong>
+                  {selectedTraineeForPassword.person?.userAccounts?.[0]?.username ||
+                    selectedTraineeForPassword.person?.nationalId ||
+                    '—'}
+                </strong>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                البريد الإلكتروني:{' '}
+                <strong>
+                  {selectedTraineeForPassword.person?.userAccounts?.[0]?.email ||
+                    selectedTraineeForPassword.person?.email ||
+                    '—'}
+                </strong>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                الجهة / المستشفى:{' '}
+                <strong>
+                  {selectedTraineeForPassword.organization?.nameAr ||
+                    selectedTraineeForPassword.assignedHospitalName ||
+                    'غير محدد'}
+                </strong>
+              </div>
+            </div>
+          )}
+
+          <Alert severity="info" style={{ borderRadius: '10px', fontSize: '12.5px' }}>
+            سيتم تحديث كلمة المرور وتشفيرها فوراً عبر bcrypt (10 rounds). لا يتم تخزين كلمة المرور بصيغة نصية أو تسجيلها في أي سجلات تدقيق.
+          </Alert>
+
+          {passwordError && (
+            <Alert severity="error" style={{ borderRadius: '10px', fontSize: '12.5px' }}>
+              {passwordError}
+            </Alert>
+          )}
+
+          <TextField
+            label="كلمة المرور الجديدة"
+            type={showNewPassword ? 'text' : 'password'}
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value);
+              setPasswordError(null);
+            }}
+            fullWidth
+            required
+            helperText="8 أحرف على الأقل (يُفضل مزيج من الحروف والأرقام)"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Lock size={18} color="#64748B" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    edge="end"
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+
+          <TextField
+            label="تأكيد كلمة المرور الجديدة"
+            type={showConfirmPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              setPasswordError(null);
+            }}
+            fullWidth
+            required
+            error={Boolean(confirmPassword && newPassword && confirmPassword !== newPassword)}
+            helperText={
+              confirmPassword && newPassword && confirmPassword !== newPassword
+                ? 'كلمتا المرور غير متطابقتين'
+                : 'أعد إدخال نفس كلمة المرور للتأكيد'
+            }
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Lock size={18} color="#64748B" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    edge="end"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+        </DialogContent>
+        <DialogActions style={{ padding: '16px 24px' }}>
+          <Button
+            onClick={() => {
+              setOpenPasswordModal(false);
+              setSelectedTraineeForPassword(null);
+              setNewPassword('');
+              setConfirmPassword('');
+              setPasswordError(null);
+            }}
+          >
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSavePassword}
+            disabled={
+              changePasswordMutation.isPending ||
+              !newPassword ||
+              newPassword.length < 8 ||
+              newPassword !== confirmPassword
+            }
+            style={{ backgroundColor: '#0F766E', fontWeight: 800, padding: '8px 20px' }}
+          >
+            {changePasswordMutation.isPending ? <CircularProgress size={20} color="inherit" /> : 'حفظ كلمة المرور'}
           </Button>
         </DialogActions>
       </Dialog>

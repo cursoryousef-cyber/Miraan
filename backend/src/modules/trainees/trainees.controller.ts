@@ -641,6 +641,13 @@ export class TraineesController {
         },
         competencies: { include: { procedure: true } },
         caseLogs: { take: 10, orderBy: { createdAt: 'desc' } },
+        // TraineeProfile.applicationStatus is stamped once at cluster-approval
+        // time and never advances after that — it stays "approved" through
+        // allocation, hospital review, and hospital acceptance. The row this
+        // profile came from is the only place the real pipeline stage lives,
+        // so callers needing the true status (not just "has a profile") must
+        // read it from here instead of applicationStatus.
+        trainingRequestRow: { select: { status: true, assignedHospitalId: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

@@ -89,13 +89,27 @@ export const HospitalDashboard: React.FC = () => {
     .map((d: any) => ({ ...d, pct: d.occupancy?.occupancyPercentage ?? 0 }))
     .sort((a: any, b: any) => b.pct - a.pct);
 
-  const activeTraineesList: any[] = activeTraineesData ?? [];
+  // `/trainees/incoming` also returns trainees the cluster has approved but
+  // not yet allocated to this hospital (trainingRequestRow.status
+  // 'cluster_approved', assignedHospitalId still null) — those aren't
+  // "أطباء الامتياز النشطون بالمستشفى" yet, so this panel/KPI must only count
+  // rows that actually reached this hospital's pipeline stage.
+  const activeTraineesList: any[] = (activeTraineesData ?? []).filter((t: any) =>
+    !t.trainingRequestRow || ['hospital_accepted', 'active'].includes(t.trainingRequestRow?.status),
+  );
 
+  // t.trainingRequestRow.status is the live pipeline stage; t.applicationStatus
+  // is a snapshot stamped once at cluster-approval time and never advances
+  // past "approved" afterward, so it must never take priority when the live
+  // status is available.
   const translateTraineeStatus = (status: string) => {
     switch (status) {
       case 'active': return { label: 'نشط بالمستشفى', tone: 'success' as const };
+      case 'hospital_accepted': return { label: 'مقبول بالمستشفى', tone: 'success' as const };
       case 'approved': return { label: 'معتمد', tone: 'success' as const };
+      case 'cluster_approved': return { label: 'معتمد من التجمع', tone: 'info' as const };
       case 'allocated': return { label: 'موزع', tone: 'info' as const };
+      case 'hospital_review':
       case 'pending_hospital_review': return { label: 'مراجعة المستشفى', tone: 'warning' as const };
       case 'returned_to_cluster': return { label: 'مُعاد للتجمع', tone: 'danger' as const };
       default: return { label: status || 'نشط', tone: 'primary' as const };
@@ -195,7 +209,7 @@ export const HospitalDashboard: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: space.sm }}>
             {activeTraineesList.slice(0, 8).map((t: any) => {
               const rot = t.rotations?.[0];
-              const st = translateTraineeStatus(t.applicationStatus || t.status);
+              const st = translateTraineeStatus(t.trainingRequestRow?.status || t.applicationStatus || t.status);
               return (
                 <ListRow
                   key={t.id}
