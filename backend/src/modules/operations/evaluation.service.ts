@@ -365,6 +365,35 @@ export class EvaluationService {
       dto.secondsSpent !== undefined &&
       dto.secondsSpent < SUSPICIOUS_SECONDS_THRESHOLD;
 
+    // Idempotency. Nothing here ever looked for an existing record, so the same
+    // trainer could file the same evaluation for the same rotation any number of
+    // times — every tap of "إرسال التقييم" wrote another row, and the trainee's
+    // record accumulated duplicates of one assessment.
+    //
+    // The business key is the one the schema's own index already names —
+    // rotation + evaluatee + type — widened by the evaluator, because a rotation
+    // is legitimately assessed by more than one person: the trainer files their
+    // evaluation and an academic supervisor may file theirs of the same type.
+    // Distinct types (midpoint vs final) stay distinct, so nothing legitimate is
+    // blocked; only the identical assessment repeated by the same author is.
+    //
+    // Returning the existing record rather than throwing keeps a retried request
+    // — a flaky network, a double tap — from reading as a failure to the caller.
+    if (dto.rotationId) {
+      const existing = await this.prisma.evaluation.findFirst({
+        where: {
+          rotationId: dto.rotationId,
+          evaluateeId: dto.evaluateeId,
+          evaluatorId: user.accountId,
+          evaluationType: dto.evaluationType,
+        },
+        include: { form: true, rotation: { include: { department: true } } },
+      });
+      if (existing) {
+        return { success: true, alreadySubmitted: true, data: existing };
+      }
+    }
+
     const evaluation = await this.prisma.evaluation.create({
       data: {
         organizationId: user.organizationId,
@@ -434,7 +463,7 @@ export class EvaluationService {
       },
     });
 
-    return { success: true, data: evaluation };
+    return { success: true, alreadySubmitted: false, data: evaluation };
   }
 
   // ─── 3. Trainee → Department evaluation (anonymous toward dept) ──────────

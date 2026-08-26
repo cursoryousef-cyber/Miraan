@@ -17,11 +17,14 @@
 
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { devSeedPassword } from './dev-password';
 
 const prisma = new PrismaClient();
 
 export const SCENARIO = {
-  password: process.env.DEV_SEED_PASSWORD ?? 'Aa123456',
+  // Same rule as every other fixture: the password comes from the environment,
+  // and is generated per run when unset. Nothing guessable is committed.
+  password: devSeedPassword(),
   accounts: {
     platform: 'e2e.platform@miran.test',
     universityAdmin: 'e2e.uni@miran.test',
@@ -34,6 +37,13 @@ export const SCENARIO = {
     hospital1Trainer2: 'e2e.h1.trainer2@miran.test',
     hospital2Trainer: 'e2e.h2.trainer@miran.test',
     trainee: 'e2e.trainee@miran.test',
+    // The two trainees that carry the rotation, attendance and logbook data the
+    // trainee screens read. They existed only as hand-made rows, so their
+    // password was not reproducible from the repository and nobody could sign in
+    // as them; they are seeded here against their existing national ids so the
+    // profiles and rotations already attached to them are adopted, not duplicated.
+    student1: 'e2e.stu1@miran.test',
+    student2: 'e2e.stu2@miran.test',
     // Reproduces the production shape behind the privilege leak: a hospital
     // account carrying a roleless membership row against the cluster.
     nullContextTrainee: 'e2e.nullctx@miran.test',
@@ -107,7 +117,10 @@ async function account(params: {
   const passwordHash = await bcrypt.hash(SCENARIO.password, 10);
   const acct = await prisma.userAccount.upsert({
     where: { email: params.email },
-    update: { passwordHash, isActive: true },
+    // Re-seeding an account must leave it signable-in. Failed attempts latch a
+    // lockout on the row, and without clearing it here the seed would hand back an
+    // account with a known password that still refuses the password.
+    update: { passwordHash, isActive: true, loginAttempts: 0, lockedUntil: null },
     create: {
       email: params.email,
       passwordHash,
@@ -136,16 +149,30 @@ async function account(params: {
     });
   }
 
+  // Seeding an account into a second organisation used to mark that membership
+  // primary as well, leaving the account primary in two places at once — which is
+  // how the trainees ended up primary in a hospital and in its cluster, making the
+  // active organisation depend on row order. Only the first membership becomes
+  // primary; a later one joins as secondary unless it is the same row being
+  // re-seeded. A partial unique index enforces this at the database level, so
+  // without it the second upsert here would now fail outright.
+  const existingPrimaryOrg = await prisma.userOrganization.findFirst({
+    where: { userAccountId: acct.id, isPrimary: true, isActive: true },
+    select: { organizationId: true },
+  });
+  const isPrimaryOrg =
+    !existingPrimaryOrg || existingPrimaryOrg.organizationId === params.organizationId;
+
   await prisma.userOrganization.upsert({
     where: {
       userAccountId_organizationId: {
         userAccountId: acct.id, organizationId: params.organizationId,
       },
     },
-    update: { isActive: true, isPrimary: true },
+    update: { isActive: true, isPrimary: isPrimaryOrg },
     create: {
       userAccountId: acct.id, organizationId: params.organizationId,
-      isPrimary: true, isActive: true,
+      isPrimary: isPrimaryOrg, isActive: true,
     },
   });
 
@@ -155,13 +182,18 @@ async function account(params: {
       })
     : null;
   if (role && !existingAssignment) {
+    // Same one-primary rule as the membership row above.
+    const existingPrimaryAssignment = await prisma.organizationAssignment.findFirst({
+      where: { userAccountId: acct.id, isPrimary: true, isActive: true },
+      select: { id: true },
+    });
     await prisma.organizationAssignment.create({
       data: {
         userAccountId: acct.id,
         organizationId: params.organizationId,
         roleId: role.id,
         departmentId: params.departmentId,
-        isPrimary: true,
+        isPrimary: !existingPrimaryAssignment,
         isActive: true,
         sourceType: 'manual',
       },
@@ -326,6 +358,17 @@ export async function seedE2EScenario() {
     nullCtx: await account({
       email: SCENARIO.accounts.nullContextTrainee, nameAr: 'متدرب بسياق بلا دور',
       nationalId: '9100000012', roleCode: 'trainee', organizationId: hospital1.id,
+    }),
+    // National ids match the rows already in the database, so `account()` upserts
+    // the existing person rather than creating a second one — the trainee profile,
+    // rotations and attendance hanging off them stay attached.
+    student1: await account({
+      email: SCENARIO.accounts.student1, nameAr: 'طالب الرحلة الأول',
+      nationalId: '1100000001', roleCode: 'trainee', organizationId: hospital1.id,
+    }),
+    student2: await account({
+      email: SCENARIO.accounts.student2, nameAr: 'طالبة الرحلة الثانية',
+      nationalId: '1100000002', roleCode: 'trainee', organizationId: hospital1.id,
     }),
   };
 

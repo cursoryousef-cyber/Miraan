@@ -16,6 +16,38 @@ import { PrismaService } from '../../prisma/prisma.service';
 export const MEMBERSHIP_SOURCES = ['user_organization', 'user_role', 'manual'];
 
 /**
+ * Chooses the active organisation from the memberships a user holds.
+ *
+ * `find(isPrimary)` alone returns whichever primary row the query happened to
+ * order first. That was fine while one primary was guaranteed, but the flag was
+ * per-row with nothing enforcing uniqueness, and accounts existed that were
+ * primary in a hospital *and* in the cluster above it — so the active
+ * organisation, and every scope derived from it, depended on row order.
+ *
+ * A unique index now prevents new duplicates, but the tie is broken here too: of
+ * several primaries the most specific wins, meaning one that is not the parent of
+ * another organisation in the same list. Belonging to a hospital and to the
+ * cluster that runs it describes one posting, and the hospital is where the work
+ * happens.
+ */
+export function pickActiveEntry<T extends { organization: any; isPrimary: boolean }>(
+  available: T[],
+): T | null {
+  if (available.length === 0) return null;
+
+  const primaries = available.filter((e) => e.isPrimary);
+  const candidates = primaries.length > 0 ? primaries : available;
+  if (candidates.length === 1) return candidates[0];
+
+  const parentIds = new Set(
+    available.map((e) => e.organization?.parentId).filter((id): id is string => !!id),
+  );
+  // An organisation named as someone else's parent is the less specific of the two.
+  const mostSpecific = candidates.find((e) => !parentIds.has(e.organization?.id));
+  return mostSpecific ?? candidates[0];
+}
+
+/**
  * Prisma `where` fragment selecting UserAccounts that are members of an
  * organization — assignment first, with a per-account fallback to the legacy
  * relation for accounts that have no membership assignments yet.
@@ -86,7 +118,10 @@ export class OrganizationAssignmentService {
     available: Array<{ organization: any; isPrimary: boolean }>;
     source: 'assignment' | 'legacy';
   }> {
-    const orgInclude = { include: { organizationType: true } } as const;
+    // `parent` is loaded because callers report the administering organisation
+    // alongside the training one; /auth/me already read `organization.parent`
+    // and, with only organizationType included, silently returned null for it.
+    const orgInclude = { include: { organizationType: true, parent: true } } as const;
 
     const assignments = await this.prisma.organizationAssignment.findMany({
       where: {
@@ -122,7 +157,7 @@ export class OrganizationAssignmentService {
         }
       }
       const available = [...byOrg.values()];
-      const active = available.find((e) => e.isPrimary) ?? available[0] ?? null;
+      const active = pickActiveEntry(available);
       return { active, available, source: 'assignment' };
     }
 
@@ -135,7 +170,7 @@ export class OrganizationAssignmentService {
       organization: uo.organization,
       isPrimary: uo.isPrimary,
     }));
-    const active = available.find((e) => e.isPrimary) ?? available[0] ?? null;
+    const active = pickActiveEntry(available);
     return { active, available, source: 'legacy' };
   }
 

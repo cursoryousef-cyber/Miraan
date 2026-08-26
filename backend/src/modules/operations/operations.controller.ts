@@ -20,6 +20,14 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** Names an evaluation participant without exposing their account credentials. */
+const EVALUATION_PARTICIPANT_SELECT = {
+  select: {
+    id: true,
+    person: { select: { id: true, nameAr: true, nameEn: true } },
+  },
+} as const;
+
 @ApiTags('Production Operations')
 @ApiBearerAuth('JWT-auth')
 @Controller('operations')
@@ -38,13 +46,38 @@ export class OperationsController {
     const traineeWhere = this.trainerTraineeScope(trainer, user);
     const assignedTrainees = await this.prisma.traineeProfile.count({ where: traineeWhere });
     const pendingAttendance = await this.prisma.attendance.count({ where: { organizationId: user.organizationId, status: 'correction_requested' } });
+    // Same scope the case list uses: records stamped with this trainer, plus
+    // records of the trainees assigned to them. Counting only the first left the
+    // dashboard reporting zero pending while the trainee's records sat waiting.
+    const trainerCaseScope = trainer
+      ? {
+          OR: [
+            { trainerProfileId: trainer.id },
+            {
+              traineeProfile: {
+                rotations: {
+                  some: {
+                    trainerProfileId: trainer.id,
+                    organizationId: user.organizationId,
+                    status: 'active',
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {};
     const pendingLogbook = await this.prisma.clinicalCaseLog.count({
-      where: { organizationId: user.organizationId, ...(trainer ? { trainerProfileId: trainer.id } : {}), status: { in: ['submitted', 'modification_requested'] } },
+      where: { organizationId: user.organizationId, ...trainerCaseScope, status: { in: ['submitted', 'modification_requested'] } },
     });
     const activeRotations = await this.prisma.rotation.count({
       where: { organizationId: user.organizationId, ...(trainer ? { trainerProfileId: trainer.id } : {}), status: 'active' },
     });
-    const openCalls = await this.prisma.trainerCall.count({ where: { organizationId: user.organizationId, status: 'active' } });
+    // A trainer's board is their own calls, not every call running in the
+    // hospital — the count was organisation-wide for a role scoped to itself.
+    const openCalls = await this.prisma.trainerCall.count({
+      where: { organizationId: user.organizationId, status: 'active', ...(trainer ? { trainerProfileId: trainer.id } : {}) },
+    });
     const dueTasks = await this.prisma.task.count({ where: { organizationId: user.organizationId, assignedToId: user.accountId, status: { not: 'completed' } } });
     const unreadNotifications = await this.prisma.notification.count({ where: { userId: user.accountId, isRead: false } });
 
@@ -67,10 +100,52 @@ export class OperationsController {
       ? await this.prisma.competencyProgress.count({ where: { traineeProfileId: { in: assignedTraineeIds }, status: { not: 'completed' } } })
       : 0;
 
+    // ── Counts the trainer dashboard renders as KPI tiles ──────────────────
+    // Every one is derived from this trainer's own scope: their trainees, their
+    // records, their sessions, their seats. None of them reaches hospital-wide
+    // or cluster data, which this role holds no capability for.
+
+    // Assessments this trainer has actually filed.
+    const completedEvaluations = await this.prisma.evaluation.count({
+      where: { organizationId: user.organizationId, evaluatorId: user.accountId },
+    });
+
+    // The distinct programmes the trainer's own trainees are enrolled in.
+    const programIds = new Set(
+      (
+        await this.prisma.traineeProfile.findMany({
+          where: traineeWhere,
+          select: { programId: true },
+        })
+      )
+        .map((t) => t.programId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const trainingPrograms = programIds.size;
+
+    // Seats: the trainer's own capacity, from their profile.
+    const seatCapacity = trainer?.maxTrainees ?? 0;
+    const availableSeats = Math.max(0, seatCapacity - assignedTrainees);
+
+    // Sessions this trainer runs, from today onwards.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const scheduledSessions = trainer
+      ? await this.prisma.scheduleSession.count({
+          where: {
+            organizationId: user.organizationId,
+            trainerProfileId: trainer.id,
+            date: { gte: startOfToday },
+            status: { not: 'cancelled' },
+          },
+        })
+      : 0;
+
     return {
       data: {
         assignedTrainees, pendingAttendance, pendingLogbook, activeRotations, openCalls, dueTasks, unreadNotifications,
         presentToday, absentOrNotCheckedIn: notCheckedIn, pendingEvaluations, incompleteCompetencies,
+        completedEvaluations, trainingPrograms, seatCapacity, availableSeats, scheduledSessions,
       },
     };
   }
@@ -93,9 +168,31 @@ export class OperationsController {
   @RequireRoles('trainer', 'org_manager', 'platform_owner')
   async assignedInterns(@CurrentUser() user: IAuthenticatedUser) {
     const trainer = await this.myTrainer(user);
+    // A trainee can hold more than one active rotation at a time — the E2E
+    // trainee runs الباطنة under this trainer and الأطفال under another. Returning
+    // every active rotation let the client bind the evaluation form to whichever
+    // came back first, so a trainer opening the form for their own trainee was
+    // submitting against another trainer's rotation and was correctly refused by
+    // `evaluation.service`: "لا يمكنك تقييم متدرب في دورة تدريبية غير مسندة إليك".
+    // A trainer's roster shows the rotation that trainer supervises; supervisory
+    // roles reading this endpoint still see all of them.
+    const rotationFilter =
+      trainer && user.roles.includes('trainer')
+        ? { status: 'active', trainerProfileId: trainer.id }
+        : { status: 'active' };
     const data = await this.prisma.traineeProfile.findMany({
       where: this.trainerTraineeScope(trainer, user),
-      include: { person: true, organization: true, rotations: { where: { status: 'active' }, include: { department: true, trainerProfile: { include: { person: true } } } } },
+      include: {
+        // An evaluation is filed against the trainee's *user account*, not the
+        // trainee profile, so the client cannot submit one without it. `person`
+        // alone omitted userAccounts, which left every trainer's evaluation form
+        // permanently un-submittable ("تعذر تحديد حساب المتدرب المرتبط") even
+        // though the endpoint behind it accepts the request. Only the id and the
+        // active flag are selected — no credentials leave the server.
+        person: { include: { userAccounts: { select: { id: true, isActive: true } } } },
+        organization: true,
+        rotations: { where: rotationFilter, include: { department: true, trainerProfile: { include: { person: true } } } },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return { data };
@@ -471,6 +568,49 @@ export class OperationsController {
     return { data };
   }
 
+  @Get('attendance/today')
+  @RequireRoles('trainee')
+  async getTodayAttendance(@CurrentUser() user: IAuthenticatedUser) {
+    const profile = await this.myTrainee(user);
+    if (!profile) return { data: null, activeRotation: null };
+
+    const activeRotation = await this.prisma.rotation.findFirst({
+      where: { traineeProfileId: profile.id, status: 'active' },
+      include: {
+        department: true,
+        organization: true,
+        trainerProfile: { include: { person: true } },
+      },
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const record = await this.prisma.attendance.findFirst({
+      where: { traineeProfileId: profile.id, date: today },
+      include: { shift: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      data: record,
+      activeRotation,
+    };
+  }
+
+  @Post('attendance/check-in')
+  @RequireRoles('trainee')
+  async standardCheckIn(
+    @CurrentUser() user: IAuthenticatedUser,
+    @Body() dto: { shiftId?: string; notes?: string } = {},
+  ) {
+    return this.createAttendance(user, {
+      method: 'rotation_manual',
+      shiftId: dto.shiftId,
+      excuseReason: dto.notes,
+    });
+  }
+
   @Post('attendance/gps')
   @RequireRoles('trainee')
   async gpsAttendance(@CurrentUser() user: IAuthenticatedUser, @Body() dto: { lat: number; lng: number; shiftId?: string }) {
@@ -566,7 +706,15 @@ export class OperationsController {
         organizationId: user.organizationId,
         ...(await this.evaluationReadScope(user)),
       },
-      include: { form: true, evaluator: { include: { person: true } }, evaluatee: { include: { person: true } }, rotation: { include: { department: true } } },
+      // Only the participants' names are displayed. Including the UserAccount whole
+      // carried passwordHash, refreshTokenHash, mfaSecret and nationalId for both
+      // evaluator and evaluatee into a response any evaluation reader receives.
+      include: {
+        form: true,
+        evaluator: EVALUATION_PARTICIPANT_SELECT,
+        evaluatee: EVALUATION_PARTICIPANT_SELECT,
+        rotation: { include: { department: true } },
+      },
       orderBy: { submittedAt: 'desc' },
       take: 100,
     });
@@ -914,6 +1062,11 @@ export class OperationsController {
 
     if (!activeRotation) {
       throw new BadRequestException('لا يوجد روتيشن نشط متاح لتسجيل الحضور');
+    }
+
+    const now = new Date();
+    if (now < new Date(activeRotation.startDate) || now > new Date(activeRotation.endDate)) {
+      throw new BadRequestException('التاريخ الحالي خارج نطاق فترة الروتيشن النشط');
     }
 
     const today = new Date();

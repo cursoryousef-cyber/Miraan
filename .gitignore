@@ -56,3 +56,7 @@ backend/assign_dept.json
 backend/submit_batch.json
 backend/row_id.txt
 .e2e-tmp/
+
+# قاعدة PostgreSQL المحلية — بيانات تشغيل لا مصدر
+backend/.pg-data/
+.pg-data/

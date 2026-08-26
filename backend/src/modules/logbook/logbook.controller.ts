@@ -294,12 +294,18 @@ export class LogbookController {
     return { data: logs };
   }
 
-  // `trainee` is deliberately absent: a trainee does not author their own
-  // clinical log. `/logbook/cases` is an alias that calls straight into this
-  // method, so gating only that alias left this — the real endpoint — open to
-  // any trainee calling it directly, regardless of the hidden UI button.
+  // A trainee records their own clinical case; a trainer approves it. That is the
+  // contract the capability model states — LOGBOOK_SUBMIT is granted to `trainee`
+  // and to no other role, while `trainer` holds LOGBOOK_APPROVE — and it is what
+  // the body below implements: a trainee's target profile is resolved from their
+  // own session and `dto.traineeProfileId` is ignored, so they cannot file against
+  // anyone else. Entries are created `submitted`, never approved, so authoring one
+  // grants no credit until a trainer signs it off.
+  //
+  // `trainee` was previously excluded here, which left the role holding
+  // logbook.submit with no endpoint to submit through.
   @Post('entries')
-  @RequireRoles('trainer', 'hospital_training_admin', 'cluster_administrator', 'cluster_manager', 'training_director', 'platform_owner', 'org_manager')
+  @RequireRoles('trainee', 'trainer', 'hospital_training_admin', 'cluster_administrator', 'cluster_manager', 'training_director', 'platform_owner', 'org_manager')
   @ApiOperation({ summary: 'تسجيل حالة سريرية أو إجراء طبي جديد' })
   async createLogEntry(
     @CurrentUser() user: IAuthenticatedUser,
@@ -437,7 +443,31 @@ export class LogbookController {
     const logs = await this.prisma.clinicalCaseLog.findMany({
       where: {
         organizationId: user.organizationId,
-        ...(trainer ? { trainerProfileId: trainer.id } : {}),
+        // A trainer's review queue is the records of the trainees assigned to
+        // them. Filtering on `trainerProfileId` alone hid every case a trainee
+        // submitted without a trainer stamped on it — two of the E2E trainee's
+        // records sat at "submitted" where no trainer could ever see, let alone
+        // approve, them. The second arm is the same active-rotation link
+        // `trainerTraineeScope` uses everywhere else, so the scope does not widen
+        // beyond the caller's own trainees.
+        ...(trainer
+          ? {
+              OR: [
+                { trainerProfileId: trainer.id },
+                {
+                  traineeProfile: {
+                    rotations: {
+                      some: {
+                        trainerProfileId: trainer.id,
+                        organizationId: user.organizationId,
+                        status: 'active',
+                      },
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
         ...(traineeProfile ? { traineeProfileId: traineeProfile.id } : {}),
       },
       include: {
@@ -452,8 +482,11 @@ export class LogbookController {
     return { data: logs };
   }
 
+  // Alias of POST /logbook/entries — it calls straight into it, so the two role
+  // lists must agree. They did not: `trainee`, the only role holding
+  // logbook.submit, could reach neither, and the iOS case form posts here.
   @Post('cases')
-  @RequireRoles('trainer', 'academic_supervisor', 'hospital_training_admin', 'org_manager', 'platform_owner')
+  @RequireRoles('trainee', 'trainer', 'academic_supervisor', 'hospital_training_admin', 'org_manager', 'platform_owner')
   async createCaseAlias(@CurrentUser() user: IAuthenticatedUser, @Body() dto: any) {
     return this.createLogEntry(user, dto);
   }

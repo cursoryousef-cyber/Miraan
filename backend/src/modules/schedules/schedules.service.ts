@@ -127,6 +127,77 @@ export class SchedulesService {
     return { data: schedules };
   }
 
+  /**
+   * Sessions inside a date window — what a daily, weekly or agenda view shows.
+   *
+   * `findAll` returns schedules, which are containers spanning weeks; a day view
+   * built from them shows the same thing on every date it covers. Sessions carry
+   * their own `date`, so the window filters the rows themselves and a different
+   * day genuinely returns a different set.
+   *
+   * Visibility is the same rule `findAll` applies: a trainee sees only their own
+   * sessions in published schedules, a trainer only sessions they run, and hospital
+   * training management sees the hospital's. Scoping is applied to the query, not
+   * to the result.
+   */
+  async findSessions(
+    user: IAuthenticatedUser,
+    query: { startDate: string; endDate?: string; departmentId?: string },
+  ) {
+    const start = new Date(query.startDate);
+    if (Number.isNaN(start.getTime())) {
+      throw new BadRequestException('تاريخ بداية الفترة غير صالح');
+    }
+    // A single date means that day alone.
+    const end = query.endDate ? new Date(query.endDate) : new Date(query.startDate);
+    if (Number.isNaN(end.getTime())) {
+      throw new BadRequestException('تاريخ نهاية الفترة غير صالح');
+    }
+    if (end < start) {
+      throw new BadRequestException('تاريخ النهاية يجب أن يكون بعد تاريخ البداية');
+    }
+
+    const where: any = {
+      organizationId: user.organizationId,
+      date: { gte: start, lte: end },
+    };
+    if (query.departmentId) where.departmentId = query.departmentId;
+
+    const isTrainee = user.roles.includes('trainee');
+    const isTrainer =
+      user.roles.includes('trainer') &&
+      !user.roles.some((r) => ['hospital_training_admin', 'org_manager', 'platform_owner'].includes(r));
+
+    if (isTrainee) {
+      const traineeProfile = await this.prisma.traineeProfile.findFirst({
+        where: { person: { userAccounts: { some: { id: user.accountId } } } },
+      });
+      if (!traineeProfile) return { data: [] };
+      where.traineeProfileId = traineeProfile.id;
+      // Trainees see published schedules only, matching findAll.
+      where.schedule = { status: 'published' };
+    } else if (isTrainer) {
+      const trainer = await this.prisma.trainerProfile.findFirst({
+        where: { person: { userAccounts: { some: { id: user.accountId } } } },
+      });
+      if (!trainer) return { data: [] };
+      where.trainerProfileId = trainer.id;
+    }
+
+    const sessions = await this.prisma.scheduleSession.findMany({
+      where,
+      include: {
+        department: true,
+        trainerProfile: { include: { person: true } },
+        traineeProfile: { include: { person: true } },
+        schedule: { select: { id: true, status: true, titleAr: true } },
+      },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    });
+
+    return { data: sessions };
+  }
+
   async findOne(id: string, user: IAuthenticatedUser) {
     const schedule = await this.prisma.trainingSchedule.findFirst({
       where: { id, organizationId: user.organizationId },

@@ -12,6 +12,23 @@ import {
 
 const VALID_STATUSES = ['open', 'under_review', 'resolved', 'closed'];
 
+/**
+ * Everything an incident needs to name a participant, and nothing else.
+ *
+ * `include: { person: true }` on a UserAccount returns every scalar on the row —
+ * passwordHash, refreshTokenHash, mfaSecret, activationToken, nationalId — and
+ * these relations are serialised straight into the incident responses. Reading
+ * an incident only requires `incident.view`, which trainees hold, so the reporter
+ * of every incident had their credential hashes readable by anyone who could open
+ * the list. A select keeps the display name reachable and leaves the rest behind.
+ */
+const INCIDENT_PARTICIPANT_SELECT = {
+  select: {
+    id: true,
+    person: { select: { id: true, nameAr: true, nameEn: true } },
+  },
+} as const;
+
 @ApiTags('Incidents (البلاغات والحوادث)')
 @ApiBearerAuth('JWT-auth')
 @Controller('incidents')
@@ -74,12 +91,12 @@ export class IncidentsController {
         include: {
           organization: { select: { id: true, nameAr: true } },
           targetOrganization: { select: { id: true, nameAr: true } },
-          reportedBy: { include: { person: true } },
-          assignedTo: { include: { person: true } },
-          resolvedBy: { include: { person: true } },
+          reportedBy: INCIDENT_PARTICIPANT_SELECT,
+          assignedTo: INCIDENT_PARTICIPANT_SELECT,
+          resolvedBy: INCIDENT_PARTICIPANT_SELECT,
           comments: {
             orderBy: { createdAt: 'asc' },
-            include: { author: { include: { person: true } } },
+            include: { author: INCIDENT_PARTICIPANT_SELECT },
           },
         },
       }),
@@ -104,12 +121,12 @@ export class IncidentsController {
       include: {
         organization: { select: { id: true, nameAr: true } },
         targetOrganization: { select: { id: true, nameAr: true } },
-        reportedBy: { include: { person: true } },
-        assignedTo: { include: { person: true } },
-        resolvedBy: { include: { person: true } },
+        reportedBy: INCIDENT_PARTICIPANT_SELECT,
+        assignedTo: INCIDENT_PARTICIPANT_SELECT,
+        resolvedBy: INCIDENT_PARTICIPANT_SELECT,
         comments: {
           orderBy: { createdAt: 'asc' },
-          include: { author: { include: { person: true } } },
+          include: { author: INCIDENT_PARTICIPANT_SELECT },
         },
       },
     });
@@ -200,7 +217,7 @@ export class IncidentsController {
         authorId: user.accountId,
         comment: dto.comment,
       },
-      include: { author: { include: { person: true } } },
+      include: { author: INCIDENT_PARTICIPANT_SELECT },
     });
 
     await this.prisma.auditLog.create({
@@ -244,7 +261,7 @@ export class IncidentsController {
         assignedToId: dto.assignedToId,
         status: incident.status === 'open' ? 'under_review' : incident.status,
       },
-      include: { assignedTo: { include: { person: true } } },
+      include: { assignedTo: INCIDENT_PARTICIPANT_SELECT },
     });
 
     await this.prisma.auditLog.create({

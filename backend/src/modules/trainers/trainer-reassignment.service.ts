@@ -43,6 +43,39 @@ const VALID_REASONS = [
   'administrative_decision',
 ];
 
+/** Arabic wording for each accepted reassignment reason. */
+const REASON_LABELS_AR: Record<string, string> = {
+  annual_leave: 'إجازة سنوية',
+  emergency_leave: 'إجازة اضطرارية',
+  sick_leave: 'إجازة مرضية',
+  maternity_leave: 'إجازة أمومة',
+  training_course: 'دورة تدريبية',
+  conference: 'مؤتمر',
+  temporary_assignment: 'تكليف مؤقت',
+  transfer: 'نقل',
+  retirement: 'تقاعد',
+  resignation: 'استقالة',
+  capacity_overflow: 'تجاوز الطاقة الاستيعابية',
+  department_closure: 'إغلاق القسم',
+  administrative_decision: 'قرار إداري',
+};
+
+/**
+ * The " — السبب: …" tail of a notification, or nothing when no reason was given.
+ *
+ * These bodies interpolated the reason directly. Not every caller supplies one —
+ * the bulk and leave-driven paths may omit it — and an absent reason is
+ * `undefined`, which a template literal renders as the text "undefined", so
+ * trainers and trainees received Arabic notifications reading "السبب: undefined".
+ * The reason is also a stored enum, so the raw code is translated rather than
+ * printed: an Arabic sentence should not end in `administrative_decision`.
+ */
+export function reasonSuffix(reason?: string | null): string {
+  const trimmed = reason?.trim();
+  if (!trimmed) return '';
+  return ` — السبب: ${REASON_LABELS_AR[trimmed] ?? trimmed}`;
+}
+
 @Injectable()
 export class TrainerReassignmentService {
   constructor(
@@ -530,7 +563,7 @@ export class TrainerReassignmentService {
           organizationId: params.organizationId,
           userId: newTrainerPerson.person.userAccounts[0].id,
           titleAr: 'تم إسناد متدرب جديد إليك',
-          bodyAr: `تم إسناد المتدرب ${params.traineeName} إليك في قسم ${params.departmentName}. السبب: ${params.reason}`,
+          bodyAr: `تم إسناد المتدرب ${params.traineeName} إليك في قسم ${params.departmentName}${reasonSuffix(params.reason)}`,
           type: 'trainer_reassignment',
           referenceType: 'TrainerProfile',
           referenceId: params.newTrainerId,
@@ -547,7 +580,7 @@ export class TrainerReassignmentService {
           organizationId: params.organizationId,
           userId: prevTrainerPerson.person.userAccounts[0].id,
           titleAr: 'تم نقل متدرب من إشرافك',
-          bodyAr: `تم نقل المتدرب ${params.traineeName} من إشرافك إلى ${params.newTrainerName}. السبب: ${params.reason}`,
+          bodyAr: `تم نقل المتدرب ${params.traineeName} من إشرافك إلى ${params.newTrainerName}${reasonSuffix(params.reason)}`,
           type: 'trainer_reassignment',
           referenceType: 'TrainerProfile',
           referenceId: params.previousTrainerId,
@@ -573,7 +606,7 @@ export class TrainerReassignmentService {
         'hospital_training_admin',
         {
           titleAr: 'تم تنفيذ إعادة إسناد مدرب',
-          bodyAr: `تم نقل ${params.traineeName} من ${params.previousTrainerName} إلى ${params.newTrainerName}. السبب: ${params.reason}`,
+          bodyAr: `تم نقل ${params.traineeName} من ${params.previousTrainerName} إلى ${params.newTrainerName}${reasonSuffix(params.reason)}`,
           type: 'trainer_reassignment',
           referenceType: 'TrainerReassignment',
         },

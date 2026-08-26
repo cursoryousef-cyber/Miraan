@@ -196,6 +196,35 @@ export class AllocationCapacitySnapshot {
   }
 }
 
+/**
+ * The period a seat is being asked about.
+ *
+ * Occupancy only means anything relative to a period: a department whose seats
+ * are held until September is not full for a placement starting in January. When
+ * omitted, the window is "from today onwards", which is what a dashboard asking
+ * "how full is this department right now" means.
+ */
+export interface OccupancyWindow {
+  start: Date;
+  end?: Date | null;
+}
+
+/**
+ * Two periods overlap when each starts before the other ends. This is the
+ * comparison AllocationEngine, the rotation overlap gate and the capacity trigger
+ * all use, so every layer agrees on what counts as a clash.
+ */
+export function periodsOverlap(
+  aStart: Date,
+  aEnd: Date | null | undefined,
+  bStart: Date,
+  bEnd: Date | null | undefined,
+): boolean {
+  if (aEnd && aEnd < bStart) return false;
+  if (bEnd && bEnd < aStart) return false;
+  return true;
+}
+
 export interface OccupancyResult {
   capacity: number;
   occupied: number;
@@ -564,6 +593,7 @@ export class CapacityService {
     departmentId: string,
     trainingPeriodOrTx?: string | Prisma.TransactionClient,
     transactionClient?: Prisma.TransactionClient,
+    window?: OccupancyWindow,
   ): Promise<OccupancyResult> {
     const trainingPeriod = typeof trainingPeriodOrTx === 'string' ? trainingPeriodOrTx : undefined;
     const tx = typeof trainingPeriodOrTx === 'string' ? transactionClient : (trainingPeriodOrTx || transactionClient);
@@ -594,12 +624,27 @@ export class CapacityService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // The period the seat is wanted for. Without one, "from today onwards" — a
+    // dashboard asking how full the department is now.
+    const windowStart = window?.start ?? today;
+    const windowEnd = window?.end ?? null;
+
+    // A record occupies a seat only if its own period overlaps the window. Ending
+    // before the window starts frees the seat; starting after the window ends has
+    // not taken it yet. `endDate: null` is open-ended and always still running.
+    const overlapsWindow = {
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: windowStart } }] },
+        ...(windowEnd ? [{ startDate: { lte: windowEnd } }] : []),
+      ],
+    };
+
     const [allocations, rotations, stagingRows] = await Promise.all([
       db.traineeAllocation.findMany({
         where: {
           departmentId,
           status: 'open',
-          OR: [{ endDate: null }, { endDate: { gte: today } }],
+          ...overlapsWindow,
         },
         select: { traineeRowId: true },
       }),
@@ -607,7 +652,8 @@ export class CapacityService {
         where: {
           departmentId,
           status: 'active',
-          endDate: { gte: today },
+          endDate: { gte: windowStart },
+          ...(windowEnd ? { startDate: { lte: windowEnd } } : {}),
         },
         select: { traineeProfileId: true },
       }),
@@ -615,7 +661,7 @@ export class CapacityService {
         where: {
           assignedDepartmentId: departmentId,
           status: { in: OCCUPYING_ROW_STATUSES },
-          OR: [{ endDate: null }, { endDate: { gte: today } }],
+          ...overlapsWindow,
         },
         select: { id: true },
       }),

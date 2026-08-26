@@ -1,14 +1,82 @@
 import {
-  Controller, Get, Post, Body, Param, Query,
-  UseGuards, BadRequestException, ForbiddenException, NotFoundException,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { CurrentUser, RequireRoles } from '../../common/decorators';
 import { IAuthenticatedUser } from '../../common/interfaces';
 import { PrismaService } from '../../prisma/prisma.service';
 
-const TRAINER_ROLES = ['trainer', 'org_manager', 'platform_owner', 'hospital_training_admin', 'cluster_administrator', 'cluster_manager'];
+/**
+ * Weights for the diligence score, matching `call_system.diligence_weights` as the
+ * platform provisions it. They sum to 100 and each component is a 0–100 figure, so
+ * the weighted total is itself a percentage.
+ */
+export const DILIGENCE_WEIGHTS = {
+  /** Acknowledged the call at all. */
+  response: 40,
+  /** Arrival confirmed by a trainer, not merely self-reported. */
+  attendance: 30,
+  /** How quickly the acknowledgement came. */
+  ackSpeed: 20,
+  /** How quickly the arrival followed. */
+  arrivalSpeed: 10,
+} as const;
+
+/** An acknowledgement at or under this is full marks for speed. */
+export const ACK_TARGET_SECONDS = 120;
+/** An arrival at or under this is full marks for speed. */
+export const ARRIVAL_TARGET_SECONDS = 900;
+
+export function secondsBetween(from: Date, to: Date): number {
+  return Math.max(0, (to.getTime() - from.getTime()) / 1000);
+}
+
+export function average(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+export function roundOrNull(value: number | null): number | null {
+  return value === null ? null : Math.round(value);
+}
+
+/**
+ * A 0–100 speed mark. At or under the target scores 100; it then falls linearly
+ * and reaches 0 at three times the target. No samples means the component cannot
+ * be judged, and scoring 0 there would punish a trainee who was simply never
+ * called — so it contributes nothing instead.
+ */
+export function speedScore(actual: number | null, target: number): number {
+  if (actual === null) return 0;
+  if (actual <= target) return 100;
+  const ceiling = target * 3;
+  if (actual >= ceiling) return 0;
+  return ((ceiling - actual) / (ceiling - target)) * 100;
+}
+
+const TRAINER_ROLES = [
+  'trainer',
+  'org_manager',
+  'platform_owner',
+  'hospital_training_admin',
+  'cluster_administrator',
+  'cluster_manager',
+];
 
 /** ms → Arabic human-readable (ثانية / دقيقة) */
 function humanMs(ms: number | null): string {
@@ -51,7 +119,8 @@ export class CallsController {
   @ApiOperation({ summary: 'إطلاق نداء جديد (مع حد: نداء واحد نشط لكل مدرب)' })
   async launchCall(
     @CurrentUser() user: IAuthenticatedUser,
-    @Body() dto: {
+    @Body()
+    dto: {
       callType: string;
       customTitle?: string;
       note?: string;
@@ -77,7 +146,8 @@ export class CallsController {
       trainerProfile = fallbackTrainer;
     }
 
-    let departmentId: string = trainerProfile?.departmentId ?? dto.departmentId ?? '';
+    let departmentId: string =
+      trainerProfile?.departmentId ?? dto.departmentId ?? '';
     if (!departmentId) {
       const anyDept = await this.prisma.department.findFirst({
         where: { organizationId: user.organizationId },
@@ -89,7 +159,9 @@ export class CallsController {
     const trainerProfileId: string = trainerProfile?.id ?? '';
 
     if (!trainerProfileId) {
-      throw new BadRequestException('لم يتم العثور على مدرب مرخص بالمستشفى لإطلاق النداء باسمه');
+      throw new BadRequestException(
+        'لم يتم العثور على مدرب مرخص بالمستشفى لإطلاق النداء باسمه',
+      );
     }
 
     // ── Explicitly named recipients must be the caller's own trainees ────────
@@ -122,7 +194,10 @@ export class CallsController {
       // Hospital training administration launching on the hospital's behalf is
       // not a rotation owner and keeps the reach the route already granted it.
       const isOwnTrainerProfile = await this.prisma.trainerProfile.findFirst({
-        where: { id: trainerProfileId, person: { userAccounts: { some: { id: user.accountId } } } },
+        where: {
+          id: trainerProfileId,
+          person: { userAccounts: { some: { id: user.accountId } } },
+        },
         select: { id: true },
       });
       if (isOwnTrainerProfile) {
@@ -139,13 +214,19 @@ export class CallsController {
             select: { traineeProfileId: true },
           }),
           this.prisma.traineeAllocation.findMany({
-            where: { traineeProfileId: { in: namedIds }, trainerProfileId, status: 'open' },
+            where: {
+              traineeProfileId: { in: namedIds },
+              trainerProfileId,
+              status: 'open',
+            },
             select: { traineeProfileId: true },
           }),
         ]);
         const owned = new Set<string>([
           ...byRotation.map((r) => r.traineeProfileId),
-          ...byAllocation.map((a) => a.traineeProfileId).filter((id): id is string => !!id),
+          ...byAllocation
+            .map((a) => a.traineeProfileId)
+            .filter((id): id is string => !!id),
         ]);
         // Checked per id rather than by comparing counts: a count match only
         // means "as many rows as ids", which is the right answer for the wrong
@@ -164,7 +245,9 @@ export class CallsController {
       select: { id: true },
     });
     if (existing) {
-      throw new BadRequestException('يوجد نداء نشط بالفعل لهذا المدرب — أنهِ النداء الحالي أولاً');
+      throw new BadRequestException(
+        'يوجد نداء نشط بالفعل لهذا المدرب — أنهِ النداء الحالي أولاً',
+      );
     }
 
     const call = await this.prisma.trainerCall.create({
@@ -192,7 +275,9 @@ export class CallsController {
         ...(departmentId && (!dto.targetType || dto.targetType === 'department')
           ? { rotations: { some: { departmentId, status: 'active' } } }
           : {}),
-        ...(dto.targetTraineeIds?.length ? { id: { in: dto.targetTraineeIds } } : {}),
+        ...(dto.targetTraineeIds?.length
+          ? { id: { in: dto.targetTraineeIds } }
+          : {}),
       },
       include: {
         person: { include: { userAccounts: { select: { id: true } } } },
@@ -214,11 +299,17 @@ export class CallsController {
     }
 
     // 2. Trainers inside hospital (if all_trainers or all_both or selected_trainers)
-    if (['all_trainers', 'all_both', 'selected_trainers'].includes(dto.targetType || '')) {
+    if (
+      ['all_trainers', 'all_both', 'selected_trainers'].includes(
+        dto.targetType || '',
+      )
+    ) {
       const trainers = await this.prisma.trainerProfile.findMany({
         where: {
           organizationId: user.organizationId,
-          ...(dto.targetTrainerIds?.length ? { id: { in: dto.targetTrainerIds } } : {}),
+          ...(dto.targetTrainerIds?.length
+            ? { id: { in: dto.targetTrainerIds } }
+            : {}),
         },
         include: {
           person: { include: { userAccounts: { select: { id: true } } } },
@@ -258,7 +349,11 @@ export class CallsController {
         action: 'call.launch',
         entityType: 'TrainerCall',
         entityId: call.id,
-        newValues: { callType: call.callType, departmentId, traineesNotified: trainees.length } as any,
+        newValues: {
+          callType: call.callType,
+          departmentId,
+          traineesNotified: trainees.length,
+        } as any,
       },
     });
 
@@ -277,13 +372,15 @@ export class CallsController {
       where: { id: callId, organizationId: user.organizationId },
     });
     if (!call) throw new NotFoundException('النداء غير موجود');
-    if (call.status !== 'active') throw new BadRequestException('النداء منتهٍ بالفعل');
+    if (call.status !== 'active')
+      throw new BadRequestException('النداء منتهٍ بالفعل');
     await this._assertCallOperator(call, user);
 
     const participant = await this.prisma.callParticipant.findFirst({
       where: { callId, traineeProfileId: dto.traineeProfileId },
     });
-    if (!participant) throw new NotFoundException('المتدرب ليس مشاركاً في هذا النداء');
+    if (!participant)
+      throw new NotFoundException('المتدرب ليس مشاركاً في هذا النداء');
 
     const updated = await this.prisma.callParticipant.update({
       where: { id: participant.id },
@@ -305,7 +402,8 @@ export class CallsController {
       include: { participants: true },
     });
     if (!call) throw new NotFoundException('النداء غير موجود');
-    if (call.status === 'ended') throw new BadRequestException('النداء منتهٍ بالفعل');
+    if (call.status === 'ended')
+      throw new BadRequestException('النداء منتهٍ بالفعل');
     await this._assertCallOperator(call, user);
 
     const endedAt = new Date();
@@ -337,7 +435,9 @@ export class CallsController {
 
   @Get(':id/stats')
   @RequireRoles(...TRAINER_ROLES, 'academic_supervisor')
-  @ApiOperation({ summary: 'إحصائيات نداء محدد — الاستجابة، المعدلات، الأوقات' })
+  @ApiOperation({
+    summary: 'إحصائيات نداء محدد — الاستجابة، المعدلات، الأوقات',
+  })
   async getCallStats(
     @Param('id') callId: string,
     @CurrentUser() user: IAuthenticatedUser,
@@ -371,13 +471,22 @@ export class CallsController {
       this.prisma.trainerCall.findMany({
         where: { organizationId: user.organizationId },
         include: {
-          participants: { select: { state: true, ackAt: true, confirmedAt: true, notifiedAt: true } },
+          participants: {
+            select: {
+              state: true,
+              ackAt: true,
+              confirmedAt: true,
+              notifiedAt: true,
+            },
+          },
         },
         orderBy: { launchedAt: 'desc' },
         skip,
         take: parseInt(limit),
       }),
-      this.prisma.trainerCall.count({ where: { organizationId: user.organizationId } }),
+      this.prisma.trainerCall.count({
+        where: { organizationId: user.organizationId },
+      }),
     ]);
 
     const enriched = calls.map((c) => {
@@ -385,12 +494,18 @@ export class CallsController {
       return { ...c, stats };
     });
 
-    return { success: true, data: enriched, meta: { total, page: parseInt(page), limit: parseInt(limit) } };
+    return {
+      success: true,
+      data: enriched,
+      meta: { total, page: parseInt(page), limit: parseInt(limit) },
+    };
   }
 
   @Get('diligence')
   @RequireRoles(...TRAINER_ROLES, 'academic_supervisor')
-  @ApiOperation({ summary: 'درجات الحرص — ترتيب المتدربين حسب نسبة الاستجابة للنداءات' })
+  @ApiOperation({
+    summary: 'درجات الحرص — ترتيب المتدربين حسب نسبة الاستجابة للنداءات',
+  })
   async getDiligenceScores(@CurrentUser() user: IAuthenticatedUser) {
     // Fetch all call participants for this org's ended calls
     const participants = await this.prisma.callParticipant.findMany({
@@ -402,32 +517,110 @@ export class CallsController {
       },
     });
 
-    // Group by traineeProfileId
-    const map = new Map<string, { nameAr: string; notified: number; acked: number; arrived: number; confirmed: number }>();
+    // Group by traineeProfileId, keeping the response times the speed components need.
+    const map = new Map<
+      string,
+      {
+        nameAr: string;
+        notified: number;
+        acked: number;
+        arrived: number;
+        confirmed: number;
+        ackSeconds: number[];
+        arrivalSeconds: number[];
+        verificationGaps: number[];
+      }
+    >();
     for (const p of participants) {
       const id = p.traineeProfileId;
       const nameAr = p.traineeProfile.person?.nameAr ?? 'غير معروف';
-      if (!map.has(id)) map.set(id, { nameAr, notified: 0, acked: 0, arrived: 0, confirmed: 0 });
+      if (!map.has(id)) {
+        map.set(id, {
+          nameAr,
+          notified: 0,
+          acked: 0,
+          arrived: 0,
+          confirmed: 0,
+          ackSeconds: [],
+          arrivalSeconds: [],
+          verificationGaps: [],
+        });
+      }
       const entry = map.get(id)!;
       entry.notified++;
-      if (['acknowledged', 'self_arrived', 'confirmed_arrived'].includes(p.state)) entry.acked++;
-      if (['self_arrived', 'confirmed_arrived'].includes(p.state)) entry.arrived++;
+      if (
+        ['acknowledged', 'self_arrived', 'confirmed_arrived'].includes(p.state)
+      )
+        entry.acked++;
+      if (['self_arrived', 'confirmed_arrived'].includes(p.state))
+        entry.arrived++;
       if (p.state === 'confirmed_arrived') entry.confirmed++;
+
+      // Every interval is measured from server timestamps, never from the client.
+      if (p.ackAt) {
+        entry.ackSeconds.push(secondsBetween(p.notifiedAt, p.ackAt));
+      }
+      if (p.selfArrivedAt) {
+        entry.arrivalSeconds.push(
+          secondsBetween(p.notifiedAt, p.selfArrivedAt),
+        );
+      }
+      // How long the trainee's own "I have arrived" waited for a trainer to confirm
+      // it. A large gap means the claim went unverified, not that the trainee was slow.
+      if (p.selfArrivedAt && p.confirmedAt) {
+        entry.verificationGaps.push(
+          secondsBetween(p.selfArrivedAt, p.confirmedAt),
+        );
+      }
     }
 
-    const scores = Array.from(map.entries()).map(([traineeProfileId, d]) => ({
-      traineeProfileId,
-      nameAr: d.nameAr,
-      totalCalls: d.notified,
-      acked: d.acked,
-      arrived: d.arrived,
-      confirmedArrived: d.confirmed,
-      ackRate: d.notified ? Math.round((d.acked / d.notified) * 100) : 0,
-      arrivalRate: d.notified ? Math.round((d.arrived / d.notified) * 100) : 0,
-      diligenceScore: d.notified
-        ? Math.round(((d.acked * 0.3 + d.arrived * 0.4 + d.confirmed * 0.3) / d.notified) * 100)
-        : 0,
-    }));
+    const scores = Array.from(map.entries()).map(([traineeProfileId, d]) => {
+      // The weights are the ones the platform stores under
+      // `call_system.diligence_weights`: response 40, attendance 30, ack speed 20,
+      // arrival speed 10. The score used to be 30/40/30 over three different
+      // components, so it matched neither the stored weights nor the four the
+      // specification names, and the two speed components were not measured at all.
+      const responsePct = d.notified ? (d.acked / d.notified) * 100 : 0;
+      const attendancePct = d.notified ? (d.confirmed / d.notified) * 100 : 0;
+      const ackSpeedPct = speedScore(average(d.ackSeconds), ACK_TARGET_SECONDS);
+      const arrivalSpeedPct = speedScore(
+        average(d.arrivalSeconds),
+        ARRIVAL_TARGET_SECONDS,
+      );
+
+      const diligenceScore = d.notified
+        ? Math.round(
+            responsePct * (DILIGENCE_WEIGHTS.response / 100) +
+              attendancePct * (DILIGENCE_WEIGHTS.attendance / 100) +
+              ackSpeedPct * (DILIGENCE_WEIGHTS.ackSpeed / 100) +
+              arrivalSpeedPct * (DILIGENCE_WEIGHTS.arrivalSpeed / 100),
+          )
+        : 0;
+
+      return {
+        traineeProfileId,
+        nameAr: d.nameAr,
+        totalCalls: d.notified,
+        acked: d.acked,
+        arrived: d.arrived,
+        confirmedArrived: d.confirmed,
+        ackRate: d.notified ? Math.round(responsePct) : 0,
+        arrivalRate: d.notified
+          ? Math.round((d.arrived / d.notified) * 100)
+          : 0,
+        avgAckSeconds: roundOrNull(average(d.ackSeconds)),
+        avgArrivalSeconds: roundOrNull(average(d.arrivalSeconds)),
+        /// Mean seconds between a self-reported arrival and a trainer confirming it.
+        verificationGapSeconds: roundOrNull(average(d.verificationGaps)),
+        components: {
+          response: Math.round(responsePct),
+          attendance: Math.round(attendancePct),
+          ackSpeed: Math.round(ackSpeedPct),
+          arrivalSpeed: Math.round(arrivalSpeedPct),
+        },
+        diligenceScore,
+      };
+    });
 
     scores.sort((a, b) => b.diligenceScore - a.diligenceScore);
     return { success: true, data: scores };
@@ -440,7 +633,10 @@ export class CallsController {
   @Post(':id/ack')
   @RequireRoles('trainee')
   @ApiOperation({ summary: 'تأكيد استلام النداء — للمتدرب' })
-  async acknowledgeCall(@Param('id') callId: string, @CurrentUser() user: IAuthenticatedUser) {
+  async acknowledgeCall(
+    @Param('id') callId: string,
+    @CurrentUser() user: IAuthenticatedUser,
+  ) {
     const participant = await this._getParticipant(callId, user.accountId);
     return this.prisma.callParticipant.update({
       where: { id: participant.id },
@@ -451,7 +647,10 @@ export class CallsController {
   @Post(':id/on-way')
   @RequireRoles('trainee')
   @ApiOperation({ summary: 'أنا في الطريق — للمتدرب' })
-  async onWay(@Param('id') callId: string, @CurrentUser() user: IAuthenticatedUser) {
+  async onWay(
+    @Param('id') callId: string,
+    @CurrentUser() user: IAuthenticatedUser,
+  ) {
     const participant = await this._getParticipant(callId, user.accountId);
     return this.prisma.callParticipant.update({
       where: { id: participant.id },
@@ -461,8 +660,13 @@ export class CallsController {
 
   @Post(':id/arrived')
   @RequireRoles('trainee')
-  @ApiOperation({ summary: 'وصلت (إقرار ذاتي من المتدرب) — يبقى تأكيد المدرب منفصلاً' })
-  async arrived(@Param('id') callId: string, @CurrentUser() user: IAuthenticatedUser) {
+  @ApiOperation({
+    summary: 'وصلت (إقرار ذاتي من المتدرب) — يبقى تأكيد المدرب منفصلاً',
+  })
+  async arrived(
+    @Param('id') callId: string,
+    @CurrentUser() user: IAuthenticatedUser,
+  ) {
     const participant = await this._getParticipant(callId, user.accountId);
     // A trainee reports their own arrival; only the trainer attests to it.
     // This wrote `confirmed_arrived`/`confirmedAt` — the trainer's attestation —
@@ -548,24 +752,43 @@ export class CallsController {
     });
     if (!participant) throw new NotFoundException('غير مشارك في هذا النداء');
 
-    const call = await this.prisma.trainerCall.findUnique({ where: { id: callId }, select: { status: true } });
-    if (call?.status === 'ended') throw new BadRequestException('النداء منتهٍ بالفعل');
+    const call = await this.prisma.trainerCall.findUnique({
+      where: { id: callId },
+      select: { status: true },
+    });
+    if (call?.status === 'ended')
+      throw new BadRequestException('النداء منتهٍ بالفعل');
 
     return participant;
   }
 
-  private _computeStatsSync(participants: { state: string; ackAt?: Date | null; confirmedAt?: Date | null; notifiedAt?: Date | null }[]) {
+  private _computeStatsSync(
+    participants: {
+      state: string;
+      ackAt?: Date | null;
+      confirmedAt?: Date | null;
+      notifiedAt?: Date | null;
+    }[],
+  ) {
     const total = participants.length;
-    const acked = participants.filter((p) => ['acknowledged', 'self_arrived', 'confirmed_arrived'].includes(p.state)).length;
-    const arrived = participants.filter((p) => ['self_arrived', 'confirmed_arrived'].includes(p.state)).length;
-    const confirmed = participants.filter((p) => p.state === 'confirmed_arrived').length;
+    const acked = participants.filter((p) =>
+      ['acknowledged', 'self_arrived', 'confirmed_arrived'].includes(p.state),
+    ).length;
+    const arrived = participants.filter((p) =>
+      ['self_arrived', 'confirmed_arrived'].includes(p.state),
+    ).length;
+    const confirmed = participants.filter(
+      (p) => p.state === 'confirmed_arrived',
+    ).length;
     const noShow = participants.filter((p) => p.state === 'no_show').length;
 
     // Avg ack time in ms (for those who acked)
     const ackTimes = participants
       .filter((p) => p.ackAt && p.notifiedAt)
       .map((p) => p.ackAt!.getTime() - p.notifiedAt!.getTime());
-    const avgAckMs = ackTimes.length ? Math.round(ackTimes.reduce((a, b) => a + b, 0) / ackTimes.length) : null;
+    const avgAckMs = ackTimes.length
+      ? Math.round(ackTimes.reduce((a, b) => a + b, 0) / ackTimes.length)
+      : null;
 
     return {
       total,

@@ -1173,6 +1173,7 @@ model Evaluation {
   organization   Organization   @relation(fields: [organizationId], references: [id])
   rotation       Rotation?      @relation(fields: [rotationId], references: [id])
 
+  @@unique([rotationId, evaluateeId, evaluatorId, evaluationType], map: "evaluations_rotation_evaluatee_evaluator_type_key")
   @@index([organizationId])
   @@index([rotationId, evaluateeId, evaluationType])
   @@map("evaluations")

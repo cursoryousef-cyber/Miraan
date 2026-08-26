@@ -302,6 +302,18 @@ export const ROLE_CAPABILITIES: Record<string, Capability[]> = {
   // as an organisation (members, incidents, reports) and holds ZERO training
   // capabilities, so hospital_training_admin is the only hospital training
   // management role in the model.
+  // Hospital administration — deliberately not a training role.
+  //
+  // The legacy `permissions` table still describes this role as «يدير عمليات
+  // التدريب والسعة داخل مستشفاه» and grants it manage_trainers / assign_rotations.
+  // That description is not the live contract: capabilities are what the guards
+  // read, and three separate specs assert this role holds no training capability.
+  // The `hospital_administrator_accepted` request status is likewise historical
+  // naming — the transition map routes that step to hospital_training_admin, not
+  // to this role.
+  //
+  // Training inside a hospital is owned by hospital_training_admin alone. This
+  // role administers the organisation: its members, its incidents, its reports.
   hospital_administrator: [
     C.ORG_VIEW,
     C.ORG_MEMBER_VIEW,

@@ -35,7 +35,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
     } else if (exception instanceof Error) {
       message = exception.message;
 
-      if (exception.constructor.name === 'PrismaClientKnownRequestError') {
+      // Capacity is enforced by database triggers (RAISE EXCEPTION 'CAPACITY_EXCEEDED: …'),
+      // which Prisma surfaces as an *unknown* request error — so it missed the known-error
+      // mapping below and left the raw driver text, including the query and absolute source
+      // paths, as a 500 body. The trigger already produces the Arabic sentence to show, so
+      // it is lifted out and returned as the conflict this actually is; callers could not
+      // otherwise tell a full department from a broken server.
+      const capacityMatch = /CAPACITY_EXCEEDED:\s*([^\n"\\]+)/.exec(message);
+      if (capacityMatch) {
+        status = HttpStatus.CONFLICT;
+        message = capacityMatch[1].trim();
+      } else if (exception.constructor.name === 'PrismaClientKnownRequestError') {
         const prismaError = exception as unknown as { code: string; meta?: Record<string, unknown> };
         switch (prismaError.code) {
           case 'P2002': {

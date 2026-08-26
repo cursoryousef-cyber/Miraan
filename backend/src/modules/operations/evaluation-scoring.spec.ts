@@ -67,7 +67,16 @@ describe('Evaluation — criterion scoring + ownership', () => {
         }),
       },
       evaluation: {
-        findFirst: jest.fn().mockResolvedValue(opts.hasDeptEval ? { id: 'dept-eval-1' } : null),
+        // Two different lookups reach this mock: the mutual-lock check for the
+        // trainee's department evaluation, and the idempotency check for an
+        // assessment this evaluator already filed. Answering both with the same
+        // row made every submission look like a repeat.
+        findFirst: jest.fn().mockImplementation((args: any) => {
+          if (args?.where?.evaluationType === 'department_by_trainee') {
+            return Promise.resolve(opts.hasDeptEval ? { id: 'dept-eval-1' } : null);
+          }
+          return Promise.resolve(null);
+        }),
         create: jest.fn().mockImplementation(({ data, include }: any) =>
           Promise.resolve({
             id: 'eval-new-1',

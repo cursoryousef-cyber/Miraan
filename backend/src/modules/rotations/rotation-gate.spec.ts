@@ -44,8 +44,15 @@ describe('RotationsController creation gate', () => {
           organizationId: opts.trainerOrgId ?? HOSPITAL_A,
         }),
       },
+      // No clashing rotation, so these cases exercise the acceptance and ownership
+      // gates they are about rather than stopping at the overlap check that
+      // follows them. Overlap itself is covered in rotation-overlap.spec.ts.
+      rotation: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: "rotation-1" }),
+      },
     } as any;
-    return new RotationsController(prisma);
+    return new RotationsController(prisma, { getDepartmentOccupancy: jest.fn().mockResolvedValue({ capacity: 0, occupied: 0, available: 0, occupancyPercentage: 0 }) } as any);
   }
 
   const dto = {
@@ -156,7 +163,7 @@ describe('RotationsController edit gate', () => {
         }),
       },
     } as any;
-    return new RotationsController(prisma);
+    return new RotationsController(prisma, { getDepartmentOccupancy: jest.fn().mockResolvedValue({ capacity: 0, occupied: 0, available: 0, occupancyPercentage: 0 }) } as any);
   }
 
   const assertEdit = (c: RotationsController, dto: any) =>

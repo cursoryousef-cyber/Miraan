@@ -33,6 +33,27 @@ export class SchedulesController {
     return this.schedulesService.findAll(user, { status, traineeId, departmentId });
   }
 
+  // Sessions in a date window. `GET /schedules` returns schedules, which span
+  // weeks — a day view built on those shows identical content for every date they
+  // cover. Sessions carry their own date, so this is what a daily, weekly or
+  // agenda view queries, and changing the selected date changes the result.
+  @Get('sessions')
+  @RequireCapability(
+    CAPABILITIES.SCHEDULE_VIEW,
+    CAPABILITIES.TRAINEE_VIEW_HOSPITAL,
+    CAPABILITIES.TRAINEE_VIEW_ASSIGNED,
+    CAPABILITIES.SELF_VIEW,
+  )
+  @ApiOperation({ summary: 'جلسات الجدول التدريبي ضمن فترة محددة (يومي / أسبوعي / أجندة)' })
+  async findSessions(
+    @CurrentUser() user: IAuthenticatedUser,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    return this.schedulesService.findSessions(user, { startDate, endDate, departmentId });
+  }
+
   @Get(':id')
   @RequireCapability(CAPABILITIES.SCHEDULE_VIEW, CAPABILITIES.SELF_VIEW)
   @ApiOperation({ summary: 'تفاصيل جدول تدريبي محدد مع جلساته وإصداراته' })

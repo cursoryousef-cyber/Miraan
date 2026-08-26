@@ -13,6 +13,30 @@ import { IAuthenticatedUser } from '../../common/interfaces';
 import { OrganizationAssignmentService } from '../organization-assignments/organization-assignment.service';
 import { capabilitiesForRoles } from '../../common/authz/capabilities';
 
+/**
+ * The organisation shape returned by every auth endpoint.
+ *
+ * `/auth/login` and `/auth/me` each built their own object literal and drifted:
+ * login sent `isPrimary` but no `type`, me sent `type` and `logoUrl` but no
+ * `isPrimary`. The client keeps whichever payload it last received, so the same
+ * organisation arrived with different fields depending on how the session
+ * started, and a client wanting the type had to know which call produced it.
+ * Both now serialise through here.
+ */
+export function toOrgContract(organization: any, isPrimary?: boolean) {
+  return {
+    id: organization.id,
+    code: organization.code,
+    nameAr: organization.nameAr,
+    nameEn: organization.nameEn,
+    type: organization.organizationType?.code || 'hospital',
+    logoUrl: organization.logoUrl ?? null,
+    parentId: organization.parentId ?? null,
+    parentNameAr: organization.parent?.nameAr ?? null,
+    isPrimary: isPrimary ?? null,
+  };
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -193,19 +217,10 @@ export class AuthService {
         permissions,
         capabilities,
         // ────────────────────────────────────────────────────────
-        activeOrganization: {
-          id: primaryOrg.organization.id,
-          code: primaryOrg.organization.code,
-          nameAr: primaryOrg.organization.nameAr,
-          nameEn: primaryOrg.organization.nameEn,
-        },
-        availableOrganizations: orgContext.available.map((entry) => ({
-          id: entry.organization.id,
-          code: entry.organization.code,
-          nameAr: entry.organization.nameAr,
-          nameEn: entry.organization.nameEn,
-          isPrimary: entry.isPrimary,
-        })),
+        activeOrganization: toOrgContract(primaryOrg.organization, primaryOrg.isPrimary),
+        availableOrganizations: orgContext.available.map((entry) =>
+          toOrgContract(entry.organization, entry.isPrimary),
+        ),
       },
       tokens,
     };
@@ -330,14 +345,9 @@ export class AuthService {
     const activeEntry =
       orgContext.available.find((e) => e.organization.id === activeOrgId) ?? orgContext.available[0];
 
-    const availableOrganizations = orgContext.available.map((entry) => ({
-      id: entry.organization.id,
-      code: entry.organization.code,
-      nameAr: entry.organization.nameAr,
-      nameEn: entry.organization.nameEn,
-      type: entry.organization.organizationType?.code || 'hospital',
-      logoUrl: entry.organization.logoUrl,
-    }));
+    const availableOrganizations = orgContext.available.map((entry) =>
+      toOrgContract(entry.organization, entry.isPrimary),
+    );
 
     return {
       user: {
@@ -354,16 +364,9 @@ export class AuthService {
         permissions,
         // القدرات هي ما تبني عليه الواجهة قوائمها — لا مصفوفات أدوار مشفّرة.
         capabilities,
-        activeOrganization: activeEntry ? {
-          id: activeEntry.organization.id,
-          code: activeEntry.organization.code,
-          nameAr: activeEntry.organization.nameAr,
-          nameEn: activeEntry.organization.nameEn,
-          type: activeEntry.organization.organizationType?.code || 'hospital',
-          logoUrl: activeEntry.organization.logoUrl,
-          parentId: activeEntry.organization.parentId,
-          parentNameAr: activeEntry.organization.parent?.nameAr || null,
-        } : null,
+        activeOrganization: activeEntry
+          ? toOrgContract(activeEntry.organization, activeEntry.isPrimary)
+          : null,
         availableOrganizations,
       },
     };

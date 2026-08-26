@@ -5,19 +5,19 @@ import { ROLES_KEY } from '../../common/decorators';
 import { LogbookController } from './logbook.controller';
 
 /**
- * Business rule: a trainee does not author their own clinical log — a trainer
- * records it for them.
+ * Business rule: a trainee records their own clinical case and a trainer approves
+ * it. The capability model states this directly — LOGBOOK_SUBMIT is granted to
+ * `trainee` and to no other role, while `trainer` holds LOGBOOK_APPROVE.
  *
- * That rule was previously enforced in two places that did not agree. The UI
- * hid the "record a case" button from trainees, and `POST /logbook/cases` was
- * gated correctly — but `/cases` is only an alias whose body calls straight
- * into `createLogEntry`, and `POST /logbook/entries`, the real endpoint behind
- * that method, still listed `trainee` in @RequireRoles. A trainee calling the
- * API directly was therefore accepted, hidden button or not.
+ * Both doors into `createLogEntry` must therefore admit the trainee, and both
+ * must keep admitting the supervising roles who file on an assigned trainee's
+ * behalf. `/logbook/cases` is only an alias whose body calls straight into
+ * `createLogEntry`, so a gate that disagrees between the two leaves one door
+ * open or, as happened here, shuts the role that owns the capability out of both.
  *
  * These tests read the role metadata off the decorated handlers themselves and
  * drive the real RolesGuard with it, so they fail if either endpoint's gate
- * drifts back.
+ * drifts apart from the other.
  */
 describe('LogbookController — clinical log creation role gate', () => {
   function canActivate(requiredRoles: string[], userRoles: string[]): boolean {
@@ -51,9 +51,14 @@ describe('LogbookController — clinical log creation role gate', () => {
   );
 
   describe('POST /logbook/entries', () => {
-    it('refuses trainee — the rule is enforced on the server, not by hiding a button', () => {
-      expect(ENTRY_ROLES).not.toContain('trainee');
-      expect(() => canActivate(ENTRY_ROLES, ['trainee'])).toThrow(ForbiddenException);
+    it('admits the trainee — the role that holds logbook.submit', () => {
+      expect(ENTRY_ROLES).toContain('trainee');
+      expect(canActivate(ENTRY_ROLES, ['trainee'])).toBe(true);
+    });
+
+    it('refuses a role holding no logbook capability at all', () => {
+      expect(ENTRY_ROLES).not.toContain('hospital_administrator');
+      expect(() => canActivate(ENTRY_ROLES, ['hospital_administrator'])).toThrow(ForbiddenException);
     });
 
     it('does not refuse trainer on the basis of role', () => {
@@ -77,9 +82,13 @@ describe('LogbookController — clinical log creation role gate', () => {
   });
 
   describe('POST /logbook/cases (alias onto the same handler)', () => {
-    it('also refuses trainee, so neither door into createLogEntry is open to them', () => {
-      expect(CASE_ROLES).not.toContain('trainee');
-      expect(() => canActivate(CASE_ROLES, ['trainee'])).toThrow(ForbiddenException);
+    it('admits the trainee too, so both doors into createLogEntry agree', () => {
+      expect(CASE_ROLES).toContain('trainee');
+      expect(canActivate(CASE_ROLES, ['trainee'])).toBe(true);
+    });
+
+    it('agrees with /entries on the trainee, which is the alias contract', () => {
+      expect(CASE_ROLES.includes('trainee')).toBe(ENTRY_ROLES.includes('trainee'));
     });
 
     it('does not refuse trainer on the basis of role', () => {
