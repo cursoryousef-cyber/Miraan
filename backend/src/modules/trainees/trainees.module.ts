@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TraineesController } from './trainees.controller';
 import { TraineePortalController } from './trainee-portal.controller';
+import { TrainingOverviewController } from './training-overview.controller';
 import { TraineePortalService } from './trainee-portal.service';
 import { TraineeProfileProjectionInterceptor } from './trainee-profile-projection.interceptor';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -27,7 +28,7 @@ import { TrainingRequestsModule } from '../training-requests/training-requests.m
       }),
     }),
   ],
-  controllers: [TraineesController, TraineePortalController],
+  controllers: [TraineesController, TraineePortalController, TrainingOverviewController],
   providers: [
     TraineePortalService,
     TraineeProfileProjectionInterceptor,
