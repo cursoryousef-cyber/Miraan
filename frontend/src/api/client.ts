@@ -100,24 +100,29 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
+    const endpoint = originalRequest?.url || '';
 
     if (import.meta.env.DEV) {
-      console.debug(`[API Error] ${status} ${originalRequest?.url}`, error.response?.data);
+      console.debug(`[API Status] ${status} on ${endpoint}`, {
+        refreshed: Boolean(originalRequest?._retry),
+      });
     }
 
     if (
-      originalRequest?.url?.includes('/auth/login') ||
-      originalRequest?.url?.includes('/auth/refresh-token')
+      endpoint.includes('/auth/login') ||
+      endpoint.includes('/auth/refresh-token') ||
+      endpoint.includes('/auth/activate')
     ) {
       return Promise.reject(error);
     }
 
-    if (status === 401 && !originalRequest._retry) {
+    if (status === 401 && originalRequest && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
+            originalRequest.headers = originalRequest.headers || {};
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return apiClient(originalRequest);
           })
@@ -130,25 +135,46 @@ apiClient.interceptors.response.use(
 
       if (refreshToken) {
         try {
-          const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, { refreshToken });
-          const data = res.data?.data || res.data;
-          const newAccessToken = data?.accessToken || res.data?.accessToken;
-          const newRefreshToken = data?.refreshToken || res.data?.refreshToken;
+          // Standard post to refresh-token without passing auth header
+          const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, { refreshToken }, {
+            headers: { 'Content-Type': 'application/json' },
+          });
 
-          if (!newAccessToken) throw new Error('No access token returned from refresh');
+          const data = res.data?.data || res.data;
+          const newAccessToken = data?.accessToken || data?.tokens?.accessToken;
+          const newRefreshToken = data?.refreshToken || data?.tokens?.refreshToken;
+
+          if (!newAccessToken) {
+            throw new Error('No access token returned from refresh endpoint');
+          }
+
+          if (import.meta.env.DEV) {
+            console.debug(`[Auth Refresh] Token successfully refreshed for ${endpoint}`);
+          }
 
           localStorage.setItem('access_token', newAccessToken);
-          if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
+          if (newRefreshToken) {
+            localStorage.setItem('refresh_token', newRefreshToken);
+          }
           apiClient.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+
           processQueue(null, newAccessToken);
           isRefreshing = false;
           return apiClient(originalRequest);
         } catch (refreshErr) {
           processQueue(refreshErr, null);
           isRefreshing = false;
+
+          // Clear auth tokens only on definitive refresh failure
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('active_org_id');
+          localStorage.removeItem('user_profile');
+          delete apiClient.defaults.headers.common.Authorization;
+
           window.dispatchEvent(new Event('auth:logout'));
-          localStorage.clear();
           if (window.location.pathname !== '/login' && window.location.pathname !== '/activate') {
             window.location.href = '/login';
           }
@@ -157,8 +183,13 @@ apiClient.interceptors.response.use(
       }
 
       isRefreshing = false;
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('active_org_id');
+      localStorage.removeItem('user_profile');
+      delete apiClient.defaults.headers.common.Authorization;
+
       window.dispatchEvent(new Event('auth:logout'));
-      localStorage.clear();
       if (window.location.pathname !== '/login' && window.location.pathname !== '/activate') {
         window.location.href = '/login';
       }
