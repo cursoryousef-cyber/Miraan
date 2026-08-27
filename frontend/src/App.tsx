@@ -47,48 +47,37 @@ const HospitalWorkspace = lazy(() => import('./pages/hospital/HospitalWorkspace'
 const CallsHub = lazy(() => import('./pages/hospital/CallsHub').then(m => ({ default: m.CallsHub })));
 const TrainerReassignment = lazy(() => import('./pages/TrainerReassignment').then(m => ({ default: m.TrainerReassignment })));
 const TrainerLeaveManagement = lazy(() => import('./pages/TrainerLeaveManagement').then(m => ({ default: m.TrainerLeaveManagement })));
-const ProfilePage = lazy(() => import('./pages/Profile'));
+const ProfilePage = lazy(() => import('./pages/ProfileRTL'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 5,
       retry: (failureCount, error: any) => {
         const status = error?.response?.status;
-        if (status && status >= 400 && status < 500) {
-          return false; // Never retry 401, 403, 404, or 400 client errors
-        }
+        if (status && status >= 400 && status < 500) return false;
         return failureCount < 2;
       },
     },
   },
 });
 
-// ─── Auth Guard ──────────────────────────────────────────────────────────
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-// ─── Role Guard: blocks access and redirects to / ────────────────────────
 const RoleRoute: React.FC<{ allowedRoles: string[]; children: React.ReactNode }> = ({ allowedRoles, children }) => {
   const { hasAnyRole } = useAuth();
-  if (!hasAnyRole(allowedRoles)) {
-    return <Navigate to="/" replace />;
-  }
+  if (!hasAnyRole(allowedRoles)) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
-// ─── Role constants ──────────────────────────────────────────────────────
-// Only canonical roles are listed here.
 const PLATFORM = ['platform_owner', 'system_admin', 'holding_administrator', 'org_manager'];
 const UNIVERSITY = ['university_administrator', 'academic_affairs'];
 const CLUSTER = ['cluster_administrator', 'cluster_manager', 'training_director'];
-// Hospital TRAINING management — hospital_training_admin only.
-// hospital_administrator is not a training role and gates no training route.
 const HOSPITAL = ['hospital_training_admin'];
-/** Generic (non-training) hospital administration. */
 const HOSPITAL_ADMIN = ['hospital_administrator'];
 const TRAINER = ['trainer'];
 const TRAINEE = ['trainee'];
@@ -120,10 +109,8 @@ export const App: React.FC = () => {
                     </ProtectedRoute>
                   }
                 >
-                  {/* Dashboard — available to all authenticated users, renders per-role */}
                   <Route index element={<Dashboard />} />
 
-                  {/* Platform-only routes */}
                   <Route path="organizations" element={<RoleRoute allowedRoles={[...PLATFORM, ...CLUSTER]}><Organizations /></RoleRoute>} />
                   <Route path="organizations/wizard" element={<RoleRoute allowedRoles={PLATFORM}><OrganizationWizard /></RoleRoute>} />
                   <Route path="users" element={<RoleRoute allowedRoles={PLATFORM}><UsersPage /></RoleRoute>} />
@@ -135,73 +122,35 @@ export const App: React.FC = () => {
                   <Route path="policies" element={<RoleRoute allowedRoles={PLATFORM}><Policies /></RoleRoute>} />
                   <Route path="integrations" element={<RoleRoute allowedRoles={PLATFORM}><Integrations /></RoleRoute>} />
 
-                  {/* University + Cluster + Hospital + Academic */}
                   <Route path="affiliations" element={<RoleRoute allowedRoles={[...UNIVERSITY, ...CLUSTER]}><Affiliations /></RoleRoute>} />
                   <Route path="cluster-trainees" element={<RoleRoute allowedRoles={[...CLUSTER, ...HOSPITAL, ...PLATFORM]}><ClusterTrainees /></RoleRoute>} />
-                  {/* Training program catalog. The cluster authors it; the
-                      university sponsor and hospital read it to pick/allocate,
-                      so the route is open to readers and the page itself
-                      renders read-only without authoring rights. */}
                   <Route path="programs" element={<RoleRoute allowedRoles={[...CLUSTER, ...PLATFORM, ...UNIVERSITY, ...HOSPITAL, ...ACADEMIC]}><Programs /></RoleRoute>} />
                   <Route path="intakes" element={<RoleRoute allowedRoles={[...UNIVERSITY, ...CLUSTER, ...HOSPITAL, ...ACADEMIC]}><AcademicIntakes /></RoleRoute>} />
                   <Route path="corrections" element={<RoleRoute allowedRoles={UNIVERSITY}><UniversityCorrections /></RoleRoute>} />
-                  {/* Hospital operational workspace — the single hospital surface. */}
                   <Route path="hospital" element={<RoleRoute allowedRoles={[...HOSPITAL, ...PLATFORM]}><HospitalWorkspace /></RoleRoute>} />
-                  {/* The former standalone hospital pages now live as workspace
-                      sections. The routes are kept so existing links and
-                      bookmarks land on the right section instead of 404-ing. */}
                   <Route path="hospital-capacity" element={<Navigate to="/hospital?tab=capacity" replace />} />
                   <Route path="hospital-review" element={<Navigate to="/hospital?tab=requests" replace />} />
 
-                  {/* Calls. Hospital training management drives them from its
-                      workspace tab; the trainer launches them and the trainee
-                      answers them, and neither may enter the hospital workspace,
-                      so they get the same hub on its own route. */}
-                  <Route
-                    path="calls"
-                    element={
-                      <RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...TRAINEE, ...PLATFORM]}>
-                        <CallsHub />
-                      </RoleRoute>
-                    }
-                  />
-
+                  <Route path="calls" element={<RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...TRAINEE, ...PLATFORM]}><CallsHub /></RoleRoute>} />
                   <Route path="acceptance-chain" element={<RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...PLATFORM]}><AcceptanceChain /></RoleRoute>} />
                   <Route path="incidents" element={<RoleRoute allowedRoles={[...HOSPITAL, ...HOSPITAL_ADMIN, ...TRAINER, ...CLUSTER, ...UNIVERSITY, ...ACADEMIC, ...TRAINEE, ...PLATFORM]}><Incidents /></RoleRoute>} />
                   <Route path="graduation" element={<RoleRoute allowedRoles={[...HOSPITAL, ...TRAINER, ...ACADEMIC, ...UNIVERSITY, ...PLATFORM]}><Graduation /></RoleRoute>} />
 
-                  {/* Hospital + Trainer */}
-                  {/* Training events: senders (cluster/hospital/trainer) and recipients. The
-                      backend decides reach; these routes only decide who sees which screen. */}
                   <Route path="training-events" element={<RoleRoute allowedRoles={[...PLATFORM, ...CLUSTER, ...HOSPITAL, ...TRAINER]}><TrainingEvents /></RoleRoute>} />
                   <Route path="my-training-events" element={<RoleRoute allowedRoles={[...TRAINEE, ...TRAINER]}><MyTrainingEvents /></RoleRoute>} />
                   <Route path="org-members" element={<RoleRoute allowedRoles={[...HOSPITAL, ...HOSPITAL_ADMIN, ...TRAINER, ...UNIVERSITY]}><OrgMembersPage /></RoleRoute>} />
                   <Route path="trainer-reassignment" element={<Navigate to="/hospital?tab=reassignment" replace />} />
                   <Route path="trainer-leaves" element={<Navigate to="/hospital?tab=leaves" replace />} />
 
-
-                  {/* Trainer + Trainee */}
-                  {/* Read-only schedule. GET /schedules already narrows itself
-                      per role — a trainee to published schedules they take part
-                      in, a trainer to schedules holding their sessions — so one
-                      page serves both. Authoring stays in the hospital
-                      workspace's builder; nothing here writes. */}
                   <Route path="schedules" element={<RoleRoute allowedRoles={[...TRAINER, ...TRAINEE]}><MySchedule /></RoleRoute>} />
                   <Route path="logbook" element={<RoleRoute allowedRoles={[...TRAINER, ...TRAINEE, ...HOSPITAL]}><LogbookPage /></RoleRoute>} />
                   <Route path="notifications" element={<RoleRoute allowedRoles={[...HOSPITAL, ...HOSPITAL_ADMIN, ...TRAINER, ...TRAINEE, ...CLUSTER, ...UNIVERSITY, ...ACADEMIC, ...PLATFORM]}><Notifications /></RoleRoute>} />
 
-                  {/* Trainee only */}
                   <Route path="declarations" element={<RoleRoute allowedRoles={TRAINEE}><Declarations /></RoleRoute>} />
 
-                  {/* Profile page — available to all authenticated users */}
+                  {/* One shared Arabic RTL profile for every authenticated role. */}
                   <Route path="profile" element={<ProfilePage />} />
 
-                  {/* Reports. Hospital training management is already an
-                      authorised reader on the backend (REPORT_VIEW is granted to
-                      hospital_training_admin and /reports lists the role), and its
-                      sidebar links here — the route was the only thing bouncing it
-                      back to /. The page renders read-only without authoring
-                      rights, so this grants reading and nothing more. */}
                   <Route path="reports" element={<RoleRoute allowedRoles={[...ACADEMIC, ...UNIVERSITY, ...CLUSTER, ...HOSPITAL, ...HOSPITAL_ADMIN, ...PLATFORM]}><Reports /></RoleRoute>} />
                 </Route>
 
