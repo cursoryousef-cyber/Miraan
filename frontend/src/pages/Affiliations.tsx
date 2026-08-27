@@ -7,7 +7,7 @@ import {
   FileText, CheckCircle2, Clock, Building2, Send, AlertCircle, RefreshCw,
   FolderGit2, Clock3, Sparkles, Users, XCircle, Trash2, FileSpreadsheet, Eye,
   Undo2, ShieldCheck, Search, Filter, Calendar, History, UserCheck, Layers, ArrowRight,
-  Download, Upload, Plus,
+  Download, Upload, Plus, AlertTriangle,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -849,6 +849,28 @@ export const Affiliations: React.FC = () => {
     },
   });
 
+  const [confirmFinalizeReq, setConfirmFinalizeReq] = useState<any | null>(null);
+  const finalizeApprovalsMutation = useMutation({
+    mutationFn: (id: string) => apiClient.post(`/training-requests/${id}/finalize-approvals`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['training-request-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['training-request-trainees'] });
+      queryClient.invalidateQueries({ queryKey: ['acceptance-chain'] });
+      queryClient.invalidateQueries({ queryKey: ['incoming-trainees'] });
+      queryClient.invalidateQueries({ queryKey: ['trainer-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['academic-intakes'] });
+      queryClient.invalidateQueries({ queryKey: ['timeline'] });
+      setConfirmFinalizeReq(null);
+      closeDetailsModal();
+      setSuccessMsg('تم إنهاء كافة الموافقات وتفعيل برنامج التدريب بنجاح! انتقل المتدربون إلى حالة «مسند وتحت التدريب».');
+      setErrorMsg(null);
+    },
+    onError: (err: any) => {
+      setErrorMsg(err.response?.data?.message || err.message || 'فشل إنهاء الموافقات — يرجى التحقق من اكتمال التخصيص لجميع المتدربين.');
+    },
+  });
+
   // View Details fetches the request record plus its trainee rows on open —
   // both real GET endpoints (training_request.view), nothing hardcoded.
   const { data: detailData, isLoading: detailLoading } = useQuery({
@@ -887,7 +909,7 @@ export const Affiliations: React.FC = () => {
       allocated: { label: 'موزع — بانتظار الاعتماد', color: 'warning' },
       approved: { label: 'مرسل للمستشفى', color: 'success' },
       rejected: { label: 'مرفوض من المستشفى', color: 'error' },
-      active: { label: 'مكتمل', color: 'success' },
+      active: { label: 'مكتمل / تحت التدريب', color: 'success' },
       hospital_administrator_accepted: { label: 'مقبول من المستشفى — بانتظار المشرف', color: 'info' },
       hospital_accepted: { label: 'مقبول من المستشفى', color: 'info' },
       training_supervisor_accepted: { label: 'مقبول من المشرف — بانتظار المدرب', color: 'info' },
@@ -2128,7 +2150,97 @@ export const Affiliations: React.FC = () => {
           {detailsReq && canApprove && APPROVEABLE.includes(detailsReq.status) && (
             <Button variant="contained" size="small" startIcon={<ShieldCheck size={14} />} onClick={() => { closeDetailsModal(); setConfirmApproveReq(detailsReq); }} style={{ background: '#059669', fontWeight: 700 }}>اعتماد نهائي</Button>
           )}
+
+          {/* زر إنهاء الموافقات وتفعيل التدريب لمدير التجمع */}
+          {detailsReq && isClusterUser && detailsReq.status !== 'active' && detailsReq.status !== 'rejected' && detailsReq.status !== 'graduated' && (() => {
+            const traineesList = detailTrainees || [];
+            const hasTrainees = traineesList.length > 0;
+            const missingTrainees = traineesList.filter((t: any) => {
+              const openAlloc = (t.allocations && Array.isArray(t.allocations)) ? t.allocations.find((a: any) => a.status === 'open') || t.allocations[0] : null;
+              const activeRot = t.traineeProfile?.rotations?.[0];
+              const hospId = openAlloc?.hospitalId || t.assignedHospitalId;
+              const deptId = openAlloc?.departmentId || t.assignedDepartmentId || activeRot?.departmentId;
+              const trainerId = openAlloc?.trainerProfileId || t.assignedTrainerProfileId || activeRot?.trainerProfileId;
+              return !hospId || !deptId || !trainerId;
+            });
+            const isAllComplete = hasTrainees && missingTrainees.length === 0;
+
+            return isAllComplete ? (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<CheckCircle2 size={15} />}
+                onClick={() => setConfirmFinalizeReq(detailsReq)}
+                style={{
+                  background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                  fontWeight: 800,
+                  boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+                  padding: '6px 16px',
+                }}
+              >
+                إنهاء الموافقات وتفعيل التدريب
+              </Button>
+            ) : (
+              <Tooltip
+                title={
+                  !hasTrainees
+                    ? 'لا يوجد متدربون في هذا الطلب'
+                    : `لا يمكن إنهاء الموافقات — توجد بيانات ناقصة (${missingTrainees.length} متدرب بدون مستشفى/قسم/مدرب مكتمل)`
+                }
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled
+                    startIcon={<AlertTriangle size={14} />}
+                    style={{
+                      borderColor: '#CBD5E1',
+                      color: '#64748B',
+                      fontWeight: 700,
+                    }}
+                  >
+                    لا يمكن إنهاء الموافقات — توجد بيانات ناقصة
+                  </Button>
+                </span>
+              </Tooltip>
+            );
+          })()}
+
           <Button onClick={closeDetailsModal} color="inherit">إغلاق</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* حوار تأكيد إنهاء الموافقات وتفعيل التدريب */}
+      <Dialog open={!!confirmFinalizeReq} onClose={() => setConfirmFinalizeReq(null)} maxWidth="sm" fullWidth>
+        <DialogTitle style={{ fontWeight: 800, color: '#065F46' }}>
+          ✅ إنهاء الموافقات وتفعيل برنامج التدريب
+        </DialogTitle>
+        <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '16px' }}>
+          <Alert severity="success" style={{ fontWeight: 600 }}>
+            تم التحقق من اكتمال كافة الشروط وتخصيص جميع المتدربين داخل المستشفى والقسم والمدرب السريري.
+          </Alert>
+          <div style={{ fontSize: '13.5px', color: '#334155', lineHeight: '1.6' }}>
+            سيتم نقل حالة طلب التدريب <strong>{confirmFinalizeReq?.requestNumber}</strong> إلى <strong>«مكتمل / تحت التدريب»</strong>، وتفعيل ملفات المتدربين والروتيشنات وتثبيت الإسنادات رسمياً.
+          </div>
+          {finalizeApprovalsMutation.isError && (
+            <Alert severity="error">
+              {(finalizeApprovalsMutation.error as any)?.response?.data?.message ||
+                (finalizeApprovalsMutation.error as any)?.message ||
+                'فشل إنهاء الموافقات وتفعيل التدريب'}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions style={{ padding: '16px 24px' }}>
+          <Button onClick={() => setConfirmFinalizeReq(null)} color="inherit">إلغاء</Button>
+          <Button
+            variant="contained"
+            onClick={() => finalizeApprovalsMutation.mutate(confirmFinalizeReq.id)}
+            disabled={finalizeApprovalsMutation.isPending}
+            style={{ background: 'linear-gradient(135deg, #059669 0%, #047857 100%)', fontWeight: 800 }}
+          >
+            {finalizeApprovalsMutation.isPending ? <CircularProgress size={20} color="inherit" /> : 'تأكيد التفعيل والإنهاء'}
+          </Button>
         </DialogActions>
       </Dialog>
 

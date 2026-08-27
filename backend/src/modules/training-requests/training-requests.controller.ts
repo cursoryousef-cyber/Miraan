@@ -214,6 +214,14 @@ export class TrainingRequestsController {
     return this.trainingRequestsService.approve(id, user);
   }
 
+  @Post(':id/finalize-approvals')
+  @RequireCapability(CAPABILITIES.TRAINING_REQUEST_APPROVE)
+  @ScopedResource('trainingRequest', 'id')
+  @ApiOperation({ summary: 'إنهاء الموافقات وتفعيل التدريب لجميع المتدربين' })
+  async finalizeApprovals(@Param('id') id: string, @CurrentUser() user: IAuthenticatedUser) {
+    return this.trainingRequestsService.finalizeApprovals(id, user);
+  }
+
   @Post(':id/reject')
   @RequireRoles(...CLUSTER_ROLES, ...HOSPITAL_ROLES, 'trainer')
   @ScopedResource('trainingRequest', 'id')

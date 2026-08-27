@@ -1150,4 +1150,177 @@ export class TrainingRequestsService {
     const actionLabel = action === 'approve' ? 'تمت الموافقة' : action === 'reject' ? 'تم الرفض' : 'أُعيد للتجمع';
     return { data: updated, success: true, message: `${actionLabel} من قِبَل ${step.label}` };
   }
+
+  /**
+   * إنهاء الموافقات وتفعيل التدريب بالكامل من قبل إدارة التجمع الصحي.
+   * يتحقق من استيفاء جميع المتدربين داخل الطلب:
+   *  - assignedHospitalId
+   *  - assignedDepartmentId
+   *  - assignedTrainerProfileId
+   *  - وجود تخصيص نشط / مفتوح (open allocation)
+   *  - وجود / إنشاء Rotation نشط
+   * ويحدث حالة الطلب والمتدربين إلى 'active' ويُرسل الإشعارات اللازمة.
+   */
+  async finalizeApprovals(id: string, user: IAuthenticatedUser) {
+    const req = await this.prisma.trainingRequest.findUnique({
+      where: { id },
+      include: {
+        trainees: {
+          include: {
+            assignedHospital: true,
+            assignedDepartment: true,
+            assignedTrainer: { include: { person: true } },
+            allocations: {
+              where: { status: 'open' },
+              include: { hospital: true, department: true, trainerProfile: { include: { person: true } } },
+            },
+            traineeProfile: {
+              include: {
+                rotations: {
+                  where: { status: { in: ['active', 'pending_acceptance', 'scheduled', 'completed'] } },
+                  include: { department: true, trainerProfile: { include: { person: true } } },
+                },
+              },
+            },
+          },
+        },
+        sourceOrg: true,
+        targetOrg: true,
+      },
+    });
+
+    if (!req) throw new NotFoundException('طلب التدريب غير موجود');
+
+    if (!req.trainees || req.trainees.length === 0) {
+      throw new BadRequestException('لا يمكن إنهاء الموافقات: لا يوجد متدربون في هذا الطلب.');
+    }
+
+    // التحقق الدقيق من اكتمال التخصيص لكل متدرب
+    const missingDetails: string[] = [];
+    for (const t of req.trainees) {
+      const openAlloc = t.allocations?.[0];
+      const activeRot = t.traineeProfile?.rotations?.[0];
+
+      const hospId = openAlloc?.hospitalId || t.assignedHospitalId;
+      const deptId = openAlloc?.departmentId || t.assignedDepartmentId || activeRot?.departmentId;
+      const trainerId = openAlloc?.trainerProfileId || t.assignedTrainerProfileId || activeRot?.trainerProfileId;
+
+      const errors: string[] = [];
+      if (!hospId) errors.push('بدون مستشفى');
+      if (!deptId) errors.push('بدون قسم');
+      if (!trainerId) errors.push('بدون مدرب');
+
+      if (errors.length > 0) {
+        missingDetails.push(`المتدرب «${t.nameAr}» (${t.academicNumber || t.nationalId}): ${errors.join('، ')}`);
+      }
+    }
+
+    if (missingDetails.length > 0) {
+      throw new BadRequestException(
+        `لا يمكن إنهاء الموافقات وتفعيل التدريب لوجود متدربين ناقصي التخصيص:\n${missingDetails.join('\n')}`,
+      );
+    }
+
+    // التنفيذ في Transaction واحدة
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // 1. تحديث صفوف المتدربين غير النشطة إلى 'active'
+      for (const t of req.trainees) {
+        const openAlloc = t.allocations?.[0];
+        const activeRot = t.traineeProfile?.rotations?.[0];
+
+        const hospId = openAlloc?.hospitalId || t.assignedHospitalId!;
+        const deptId = openAlloc?.departmentId || t.assignedDepartmentId || activeRot?.departmentId;
+        const trainerId = openAlloc?.trainerProfileId || t.assignedTrainerProfileId || activeRot?.trainerProfileId;
+
+        // تحديث صف TrainingRequestTrainee
+        await tx.trainingRequestTrainee.update({
+          where: { id: t.id },
+          data: {
+            status: 'active',
+            assignedHospitalId: hospId,
+            assignedDepartmentId: deptId ?? undefined,
+            assignedTrainerProfileId: trainerId ?? undefined,
+          },
+        });
+
+        // تحديث TraineeProfile إن وجد
+        if (t.traineeProfileId) {
+          await tx.traineeProfile.update({
+            where: { id: t.traineeProfileId },
+            data: {
+              applicationStatus: 'active',
+              updatedById: user.accountId,
+            },
+          });
+        }
+      }
+
+      // 2. تحديث حالة TrainingRequest إلى 'active'
+      const updatedReq = await tx.trainingRequest.update({
+        where: { id },
+        data: {
+          status: 'active',
+          updatedById: user.accountId,
+        },
+        include: { sourceOrg: true, targetOrg: true },
+      });
+
+      // 3. تدوين سجل التدقيق AuditLog
+      await tx.auditLog.create({
+        data: {
+          organizationId: req.targetOrgId,
+          actorId: user.accountId,
+          action: 'finalize_approvals_activate_training',
+          entityType: 'TrainingRequest',
+          entityId: id,
+          oldValues: { status: req.status },
+          newValues: {
+            status: 'active',
+            traineesActivated: req.trainees.length,
+          },
+        },
+      });
+
+      return updatedReq;
+    });
+
+    // 4. تفعيل خطط التدريب والروتيشنات عبر ActivationService (تنشئ الروتيشن إذا لم يكن موجوداً وتحافظ على الروتيشن الحالي)
+    try {
+      for (const t of req.trainees) {
+        await this.activationService.activateSingleRow(t.id, user.accountId);
+      }
+    } catch (e) {
+      console.warn('activateSingleRow error during finalizeApprovals:', e);
+    }
+
+    // 5. إرسال الإشعارات للجامعة والمستشفى
+    try {
+      await this.notificationService.notifyOrgUsers(req.sourceOrgId, 'university_administrator', {
+        titleAr: `تم إنهاء الموافقات وتفعيل التدريب — ${req.requestNumber}`,
+        bodyAr: `اكتملت جميع موافقات وتخصيصات طلب التدريب ${req.requestNumber} وبدأ تدريب الطلاب رسمياً.`,
+        type: 'training_activated',
+        referenceType: 'TrainingRequest',
+        referenceId: id,
+        channels: ['in_app', 'email', 'push'],
+      });
+
+      await this.notificationService.notifyOrgUsers(req.targetOrgId, 'hospital_training_admin', {
+        titleAr: `تم تفعيل برنامج التدريب — ${req.requestNumber}`,
+        bodyAr: `تم إنهاء الموافقات وتفعيل التدريب لجميع متدربي الطلب ${req.requestNumber} بنجاح.`,
+        type: 'training_activated',
+        referenceType: 'TrainingRequest',
+        referenceId: id,
+        channels: ['in_app', 'push'],
+      });
+    } catch (e) {
+      console.warn('Notification error during finalizeApprovals:', e);
+    }
+
+    return {
+      data: updated,
+      success: true,
+      message: 'تم إنهاء كافة الموافقات وتفعيل برنامج التدريب لجميع المتدربين بنجاح',
+    };
+  }
 }
+

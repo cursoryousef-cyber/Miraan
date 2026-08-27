@@ -548,7 +548,7 @@ export const ClusterTrainees: React.FC = () => {
       hospital_review: { label: 'قيد مراجعة المستشفى', bg: '#FFEDD5', color: '#C2410C', border: '#FDBA74' },
       hospital_accepted: { label: 'مقبول من المستشفى', bg: '#D1FAE5', color: '#047857', border: '#6EE7B7' },
       returned_to_cluster: { label: 'مُعاد للتجمع', bg: '#FFEDD5', color: '#C2410C', border: '#FDBA74' },
-      active: { label: 'نشط', bg: '#D1FAE5', color: '#047857', border: '#6EE7B7' },
+      active: { label: 'مسند وتحت التدريب', bg: '#D1FAE5', color: '#047857', border: '#6EE7B7' },
       rejected: { label: 'مرفوض', bg: '#FEE2E2', color: '#B91C1C', border: '#FCA5A5' },
       graduated: { label: 'متخرج', bg: '#F3E8FF', color: '#6B21A8', border: '#D8B4FE' },
     };
