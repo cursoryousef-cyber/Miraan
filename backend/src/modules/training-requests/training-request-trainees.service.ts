@@ -47,11 +47,54 @@ export class TrainingRequestTraineesService {
     private traineeAccountProvisioning: TraineeAccountProvisioningService,
   ) {}
 
-  // ─── القراءة ──────────────────────────────────────────────────────────────
   async findByRequest(trainingRequestId: string) {
     const data = await this.prisma.trainingRequestTrainee.findMany({
       where: { trainingRequestId },
-      include: { documents: true, university: true, college: true, assignedHospital: true },
+      include: {
+        documents: true,
+        university: true,
+        college: true,
+        assignedHospital: true,
+        assignedDepartment: true,
+        assignedTrainer: {
+          include: {
+            person: true,
+          },
+        },
+        allocations: {
+          where: { status: 'open' },
+          include: {
+            hospital: { select: { id: true, nameAr: true, nameEn: true, code: true } },
+            department: { select: { id: true, nameAr: true, nameEn: true } },
+            trainerProfile: {
+              select: {
+                id: true,
+                person: { select: { id: true, nameAr: true, nameEn: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        traineeProfile: {
+          include: {
+            person: true,
+            rotations: {
+              where: { status: { in: ['active', 'pending_acceptance', 'scheduled', 'completed'] } },
+              include: {
+                department: true,
+                trainerProfile: {
+                  include: {
+                    person: true,
+                  },
+                },
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'asc' },
     });
     return { data };

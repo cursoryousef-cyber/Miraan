@@ -1849,16 +1849,40 @@ export const Affiliations: React.FC = () => {
                         </TableHead>
                         <TableBody>
                           {detailTrainees.map((t: any) => {
-                            const alreadyAllocated = ALLOCATED_ROW_STATUSES.includes(t.status) || !!t.assignedHospitalId;
+                            // Find active / open allocation row specifically linked to this trainee row
+                            const openAlloc = (t.allocations && Array.isArray(t.allocations))
+                              ? t.allocations.find((a: any) => a.status === 'open') || t.allocations[0]
+                              : null;
+                            const activeRotation = t.traineeProfile?.rotations?.[0];
+
+                            const hospitalName = openAlloc?.hospital?.nameAr ||
+                              t.assignedHospital?.nameAr ||
+                              '—';
+
+                            const deptName = openAlloc?.department?.nameAr ||
+                              t.assignedDepartment?.nameAr ||
+                              activeRotation?.department?.nameAr ||
+                              null;
+
+                            const trainerName = openAlloc?.trainerProfile?.person?.nameAr ||
+                              t.assignedTrainer?.person?.nameAr ||
+                              activeRotation?.trainer?.person?.nameAr ||
+                              null;
+
+                            const deptTrainerDisplay = (deptName || trainerName)
+                              ? [deptName ? `قسم: ${deptName}` : null, trainerName ? `المدرب: ${trainerName}` : null].filter(Boolean).join(' | ')
+                              : 'غير مسند';
+
+                            const alreadyAllocated = ALLOCATED_ROW_STATUSES.includes(t.status) || !!t.assignedHospitalId || !!openAlloc;
                             const blockingErrors: any[] = Array.isArray(t.validationErrors) ? t.validationErrors : [];
-                            const chosen = rowHospital[t.id] || t.assignedHospitalId || '';
+                            const chosen = rowHospital[t.id] || t.assignedHospitalId || openAlloc?.hospitalId || '';
                             return (
                             <TableRow key={t.id}>
                               <TableCell style={{ fontWeight: 700, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{t.nameAr}</TableCell>
                               <TableCell style={{ fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>{t.academicNumber}</TableCell>
                               <TableCell style={{ fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>{t.nationalId}</TableCell>
-                              <TableCell style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{t.assignedHospital?.nameAr || '—'}</TableCell>
-                              <TableCell style={{ fontSize: '12px', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{t.assignedDepartment?.nameAr ? `قسم: ${t.assignedDepartment.nameAr}` : '—'}</TableCell>
+                              <TableCell style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{hospitalName}</TableCell>
+                              <TableCell style={{ fontSize: '12px', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{deptTrainerDisplay}</TableCell>
                               <TableCell>{getStatusChip(t.status)}</TableCell>
                               <TableCell>
                                 {(() => {
