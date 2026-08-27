@@ -28,7 +28,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -47,7 +46,6 @@ body {
   background: #0F766E;
 }
 
-/* Enterprise Card Styling */
 .glass-card {
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
@@ -67,7 +65,6 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
-/* Mobile Responsiveness Utilities */
 .responsive-table {
   display: block;
   width: 100%;
@@ -75,9 +72,6 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* ── Console layout utilities ──────────────────────────────────────────────
-   The split layout is main content beside a narrower rail on wide screens and
-   a single stacked column below 1024px, so no page ever scrolls sideways. */
 .split-grid {
   display: grid;
   gap: 16px;
@@ -91,14 +85,12 @@ body {
   }
 }
 
-/* Tables inside cards scroll within their own box, never the page. */
 .table-scroll {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Nothing is allowed to push the page wider than the viewport. */
 #root, main {
   max-width: 100%;
   box-sizing: border-box;
@@ -107,13 +99,6 @@ img, svg, table {
   max-width: 100%;
 }
 
-/* ── KPI grid ──────────────────────────────────────────────────────────────
-   Intelligent multi-breakpoint ladder:
-   - 320px - 480px: 1 to 2 columns
-   - 481px - 768px: 2 to 3 columns
-   - 769px - 1100px: 3 to 4 columns
-   - 1100px+: 4 to 6 columns
-*/
 .kpi-grid {
   display: grid;
   gap: 12px;
@@ -145,8 +130,6 @@ img, svg, table {
   .kpi-grid.cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 }
 
-/* ── Filter toolbars ───────────────────────────────────────────────────────
-   Fields wrap naturally, keep intrinsic minimums, and never cause horizontal scroll. */
 .glass-card .MuiFormControl-root,
 .glass-card .MuiTextField-root {
   max-width: 100%;
@@ -156,13 +139,10 @@ img, svg, table {
   max-width: 100%;
 }
 
-/* Long page titles wrap instead of forcing the header wider. */
 main h1 {
   overflow-wrap: anywhere;
 }
 
-/* ── Mobile experience ─────────────────────────────────────────────────────
-   Balanced padding across breakpoints without bloating buttons. */
 main {
   padding: 16px;
   box-sizing: border-box;
@@ -178,7 +158,6 @@ main {
   }
 }
 
-/* Floating action button clears the safe area on iOS. */
 .fab-root {
   position: fixed;
   inset-inline-start: 16px;
@@ -186,7 +165,6 @@ main {
   z-index: 1200;
 }
 
-/* Shown only on smaller screens — desktop keeps the action in the page header. */
 .mobile-only {
   display: none !important;
 }
@@ -196,7 +174,6 @@ main {
   }
 }
 
-/* Shown only on tablet/desktop screens */
 .desktop-only {
   display: flex !important;
 }
@@ -206,16 +183,86 @@ main {
   }
 }
 
-/* iOS Safe Area & Accessibility Utility */
 .safe-bottom-padding {
   padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
 }
 
-/* Focus visible styling for enterprise keyboard accessibility */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid #0F766E !important;
   outline-offset: 2px !important;
+}
+
+/* ── MUI dialogs / menus: keep dropdowns above the dialog backdrop ─────────
+   The hospital supervisor uses Select menus inside Dialog. The old global
+   stacking context could leave the menu visually open while clicks were being
+   intercepted by the dialog/backdrop. Keep the menu/popover interactive and
+   above dialogs, and constrain it so the mobile dialog remains usable. */
+.MuiPopover-root,
+.MuiMenu-root {
+  z-index: 1600 !important;
+  pointer-events: auto !important;
+}
+
+.MuiPopover-paper,
+.MuiMenu-paper {
+  z-index: 1601 !important;
+  max-width: min(92vw, 520px) !important;
+  max-height: min(48vh, 420px) !important;
+}
+
+.MuiMenuItem-root {
+  min-height: 44px;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+/* Keep the supervisor dialogs compact, readable and touch-friendly on phones. */
+.MuiDialog-paper {
+  margin: 12px !important;
+  width: calc(100% - 24px) !important;
+  max-height: calc(100dvh - 24px) !important;
+  border-radius: 18px !important;
+}
+
+.MuiDialogTitle-root {
+  padding: 18px 20px 12px !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere;
+}
+
+.MuiDialogContent-root {
+  padding: 12px 20px 18px !important;
+}
+
+.MuiDialogActions-root {
+  padding: 12px 20px 18px !important;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .MuiDialogTitle-root {
+    font-size: 1.05rem !important;
+  }
+
+  .MuiDialogContent-root {
+    padding: 10px 14px 16px !important;
+  }
+
+  .MuiDialogActions-root {
+    padding: 10px 14px 14px !important;
+  }
+
+  .MuiDialogActions-root > * {
+    flex: 1 1 auto;
+    min-height: 42px;
+  }
+
+  .MuiFormControl-root,
+  .MuiTextField-root {
+    min-width: 0 !important;
+  }
 }
