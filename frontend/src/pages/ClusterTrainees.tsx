@@ -10,20 +10,18 @@ const PLATFORM_ROLES = ['platform_owner', 'system_admin', 'holding_administrator
 /**
  * Allocation workspace boundary.
  *
- * The active authorization context is authoritative. A user may carry a legacy
- * cluster role as well as hospital training permissions; when the active context
- * grants hospital allocation capabilities, the user must receive the hospital
- * workflow (department/trainer), never the cluster hospital-to-hospital workflow.
+ * The active authorization context is authoritative. A user may carry a cluster
+ * role as well as hospital training permissions; hospital training management
+ * always gets the department/trainer workflow, never hospital-to-hospital moves.
  */
 export const ClusterTrainees: React.FC = () => {
   const { user, hasAnyCapability } = useAuth();
   const roles = user?.roles ?? [];
   const isPlatform = roles.some((r) => PLATFORM_ROLES.includes(r));
   const isCluster = roles.some((r) => CLUSTER_ROLES.includes(r));
-  const isHospitalAllocationContext = hasAnyCapability([
-    'allocation.hospital.assign',
-    'allocation.hospital.reassign',
-  ]);
+  const isHospitalAllocationContext =
+    roles.includes('hospital_training_admin') ||
+    hasAnyCapability(['allocation.hospital.assign', 'allocation.hospital.reassign']);
 
   if (!isPlatform && isHospitalAllocationContext) {
     return <HospitalReview />;
