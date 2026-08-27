@@ -37,7 +37,7 @@ import { AcceptanceChain } from './pages/AcceptanceChain';
 import { Incidents } from './pages/Incidents';
 import { Graduation } from './pages/Graduation';
 import { Notifications } from './pages/Notifications';
-import { MySchedule } from './pages/MySchedule';
+import MySchedule from './pages/MySchedule';
 
 // ─── Code-Split Major Pages via React.lazy ────────────────────────────────
 const Dashboard = lazy(() => import('./pages/Dashboard'));
