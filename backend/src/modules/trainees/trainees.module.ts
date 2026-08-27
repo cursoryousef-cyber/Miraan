@@ -1,7 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TraineesController } from './trainees.controller';
+import { TraineeProfileProjectionInterceptor } from './trainee-profile-projection.interceptor';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
@@ -27,5 +29,12 @@ import { TrainingRequestsModule } from '../training-requests/training-requests.m
     }),
   ],
   controllers: [TraineesController],
+  providers: [
+    TraineeProfileProjectionInterceptor,
+    {
+      provide: APP_INTERCEPTOR,
+      useExisting: TraineeProfileProjectionInterceptor,
+    },
+  ],
 })
 export class TraineesModule {}
