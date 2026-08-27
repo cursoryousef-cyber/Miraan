@@ -157,6 +157,8 @@ export const HospitalReview: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['hospitals-cards'] });
       qc.invalidateQueries({ queryKey: ['rotations-departments'] });
       qc.invalidateQueries({ queryKey: ['tr-assignment-requests'] });
+      qc.invalidateQueries({ queryKey: ['intakes'] });
+      qc.invalidateQueries({ queryKey: ['training-requests'] });
       setDialog(null);
       setSuccessMsg(res.data?.message || 'تم إسناد المتدرب وتحديث سعة القسم والمدرب بنجاح');
     },

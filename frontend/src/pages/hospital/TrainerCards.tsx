@@ -169,6 +169,8 @@ export const TrainerCards: React.FC<{ onNavigate: (tab: string) => void }> = ({ 
       queryClient.invalidateQueries({ queryKey: ['acceptance-chain-trainees'] });
       queryClient.invalidateQueries({ queryKey: ['hospitals-cards'] });
       queryClient.invalidateQueries({ queryKey: ['assigned-interns'] });
+      queryClient.invalidateQueries({ queryKey: ['intakes'] });
+      queryClient.invalidateQueries({ queryKey: ['training-requests'] });
       setAssignModalTrainer(null);
       setSelectedTraineeRowId('');
       setAssignReason('إسناد متدرب للمدرب المباشر');

@@ -219,12 +219,27 @@ export class AcademicBatchService {
     if (!batch) throw new NotFoundException('الدفعة الأكاديمية غير موجودة');
     this.scopeContext.assertOrgInScope(scope, batch.organizationId);
 
+    const traineeRowsCount = batch.traineeRows?.length ?? 0;
+    const totalTrainees = Math.max(traineeRowsCount, batch.sourceRequest?.studentCount ?? 0, batch.capacity ?? 0);
+
+    const allocatedRows = (batch.traineeRows ?? []).filter((r: any) =>
+      Boolean(
+        r.assignedHospitalId ||
+        r.assignedDepartmentId ||
+        ['allocated', 'hospital_review', 'hospital_accepted', 'active', 'graduated'].includes(r.status),
+      ),
+    );
+    const allocatedCount = allocatedRows.length;
+    const remainingCount = Math.max(0, totalTrainees - allocatedCount);
+
     return {
       data: {
         ...batch,
-        // Made explicit rather than left for the caller to infer from a null.
         hasApprovedSource: !!batch.trainingRequestId,
-        traineeCount: batch.traineeRows.length,
+        traineeCount: totalTrainees,
+        requestedCount: totalTrainees,
+        allocatedCount,
+        remainingCount,
       },
     };
   }

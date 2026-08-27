@@ -162,6 +162,9 @@ export const AcceptanceChain: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['acceptance-chain-trainees'] });
       qc.invalidateQueries({ queryKey: ['hospital-capacity-breakdown'] });
       qc.invalidateQueries({ queryKey: ['trainer-cards-assignment'] });
+      qc.invalidateQueries({ queryKey: ['intakes'] });
+      qc.invalidateQueries({ queryKey: ['training-requests'] });
+      qc.invalidateQueries({ queryKey: ['trainer-cards'] });
       setActionDialog(null);
       setSuccessMsg(res.data?.message || 'تم إسناد المتدرب للقسم والمدرب بنجاح');
     },

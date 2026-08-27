@@ -476,6 +476,12 @@ export const ClusterTrainees: React.FC = () => {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['incoming-trainees'] });
       queryClient.invalidateQueries({ queryKey: ['hospitals-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['training-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['intakes'] });
+      queryClient.invalidateQueries({ queryKey: ['hospital-review-trainees'] });
+      queryClient.invalidateQueries({ queryKey: ['acceptance-chain-trainees'] });
+      queryClient.invalidateQueries({ queryKey: ['hospital-capacity-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['trainer-cards'] });
       setOpenReallocModal(false);
       if (res.data?.result?.evaluations) {
         setAllocationResults([res.data.result]);

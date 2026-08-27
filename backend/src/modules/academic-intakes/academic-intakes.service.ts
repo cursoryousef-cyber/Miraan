@@ -74,14 +74,67 @@ export class AcademicIntakesService {
 
     const data = await Promise.all(
       rawData.map(async (intake) => {
+        // Source of truth for total trainees linked to this intake:
+        // 1. Candidate rows explicitly linked to this intake or its source request
+        // 2. Trainee profiles assigned to this intake
+        // 3. Fallback to intake capacity or _count
+        const [traineeRowsCount, traineeProfilesCount] = await Promise.all([
+          this.prisma.trainingRequestTrainee.count({
+            where: {
+              OR: [
+                { academicIntakeId: intake.id },
+                ...(intake.trainingRequestId ? [{ trainingRequestId: intake.trainingRequestId }] : []),
+              ],
+            },
+          }),
+          this.prisma.traineeProfile.count({
+            where: { academicIntakeId: intake.id },
+          }),
+        ]);
+
         const totalTrainees =
-          intake._count?.traineeProfiles || intake.capacity || 0;
-        const allocatedCount = await this.prisma.traineeProfile.count({
-          where: {
-            academicIntakeId: intake.id,
-            rotations: { some: { status: 'active' } },
-          },
-        });
+          Math.max(traineeRowsCount, traineeProfilesCount, intake._count?.traineeProfiles || 0) ||
+          intake.capacity ||
+          0;
+
+        // Allocated trainees:
+        // 1. TrainingRequestTrainee rows that have an open allocation, an assigned hospital/dept/trainer, or status in allocated/hospital_accepted/active
+        // 2. TraineeProfile records that have an organization/hospital assigned or active rotations
+        const [allocatedRowsCount, allocatedProfilesCount] = await Promise.all([
+          this.prisma.trainingRequestTrainee.count({
+            where: {
+              OR: [
+                { academicIntakeId: intake.id },
+                ...(intake.trainingRequestId ? [{ trainingRequestId: intake.trainingRequestId }] : []),
+              ],
+              AND: [
+                {
+                  OR: [
+                    { assignedHospitalId: { not: null } },
+                    { assignedDepartmentId: { not: null } },
+                    { assignedTrainerProfileId: { not: null } },
+                    { allocations: { some: { status: 'open' } } },
+                    { status: { in: ['allocated', 'hospital_review', 'hospital_accepted', 'active', 'graduated'] } },
+                    { traineeProfile: { organizationId: { not: intake.organizationId } } },
+                    { traineeProfile: { rotations: { some: { status: { in: ['active', 'pending_acceptance', 'scheduled', 'completed'] } } } } },
+                  ],
+                },
+              ],
+            },
+          }),
+          this.prisma.traineeProfile.count({
+            where: {
+              academicIntakeId: intake.id,
+              OR: [
+                { rotations: { some: { status: { in: ['active', 'pending_acceptance', 'scheduled', 'completed'] } } } },
+                { trainingRequestRow: { assignedHospitalId: { not: null } } },
+                { trainingRequestRow: { allocations: { some: { status: 'open' } } } },
+              ],
+            },
+          }),
+        ]);
+
+        const allocatedCount = Math.max(allocatedRowsCount, allocatedProfilesCount);
         const remainingCount = Math.max(0, totalTrainees - allocatedCount);
 
         return {
