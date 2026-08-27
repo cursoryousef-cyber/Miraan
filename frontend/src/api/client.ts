@@ -15,30 +15,39 @@ apiClient.interceptors.request.use(
     const token = localStorage.getItem('access_token');
     const orgId = localStorage.getItem('active_org_id');
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    if (orgId) {
-      config.headers['X-Organization-Id'] = orgId;
-    }
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    if (orgId) config.headers['X-Organization-Id'] = orgId;
 
-    // Hospital trainer assignment accepts an optional departmentId, but the
-    // backend DTO correctly requires it to be a UUID. Some trainer-card data
-    // sources expose a legacy numeric department code instead of the UUID.
-    // Never send that invalid value: the trainer already determines the
-    // placement target and the department is optional on the canonical endpoint.
-    // This keeps the assignment action usable while preserving backend validation.
+    // Canonical hospital assignment contract:
+    // the trainee-distribution screen and the trainer-card "إسناد متدرب"
+    // action must both write through the same TraineeAllocation path.
+    // Older trainer-card builds still call the legacy PATCH endpoint, so
+    // transparently route it to the canonical POST endpoint.
     if (
       config.url?.includes('/training-requests/trainees/') &&
-      config.url?.includes('/hospital-review/assignment') &&
+      config.url?.includes('/hospital-review/assignment')
+    ) {
+      config.url = config.url.replace('/hospital-review/assignment', '/allocations/department');
+      config.method = 'post';
+      config.headers['X-Miran-Assignment-Source'] = 'trainer-card-legacy';
+    }
+
+    // Department IDs are UUIDs. Never send legacy numeric department codes to
+    // the canonical endpoint. The backend remains the authority for validating
+    // the resulting department/trainer relationship.
+    if (
+      config.url?.includes('/training-requests/trainees/') &&
+      config.url?.includes('/allocations/department') &&
       config.data &&
-      typeof config.data === 'object' &&
-      'departmentId' in config.data
+      typeof config.data === 'object'
     ) {
       const departmentId = config.data.departmentId;
-      const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (departmentId && !uuidV4.test(String(departmentId))) {
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (departmentId && !uuid.test(String(departmentId))) {
         delete config.data.departmentId;
+      }
+      if (!config.data.reason) {
+        config.data.reason = 'إسناد المتدرب لقسم ومدرب داخل المستشفى';
       }
     }
 
@@ -63,18 +72,31 @@ let failedQueue: Array<{
 
 const processQueue = (error: any, token: string | null = null) => {
   failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else if (token) {
-      prom.resolve(token);
-    }
+    if (error) prom.reject(error);
+    else if (token) prom.resolve(token);
   });
   failedQueue = [];
 };
 
-// ── Interceptor: Handle 401 Refresh & Safety Logout ──────────────────────────
+// ── Interceptor: Handle 401 Refresh & Safety Logout ─────────────────────────
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Notify mounted training screens that the canonical allocation changed.
+    if (
+      response.config.url?.includes('/training-requests/trainees/') &&
+      response.config.url?.includes('/allocations/department')
+    ) {
+      const match = response.config.url.match(/\/training-requests\/trainees\/([^/]+)\//);
+      if (match?.[1]) {
+        window.dispatchEvent(
+          new CustomEvent('miran:training-assignment-changed', {
+            detail: { traineeRowId: match[1] },
+          }),
+        );
+      }
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
@@ -83,7 +105,6 @@ apiClient.interceptors.response.use(
       console.debug(`[API Error] ${status} ${originalRequest?.url}`, error.response?.data);
     }
 
-    // Do not attempt refresh on auth login or refresh-token calls themselves
     if (
       originalRequest?.url?.includes('/auth/login') ||
       originalRequest?.url?.includes('/auth/refresh-token')
@@ -105,39 +126,27 @@ apiClient.interceptors.response.use(
 
       originalRequest._retry = true;
       isRefreshing = true;
-
       const refreshToken = localStorage.getItem('refresh_token');
 
       if (refreshToken) {
         try {
-          const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
-            refreshToken,
-          });
-
+          const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, { refreshToken });
           const data = res.data?.data || res.data;
           const newAccessToken = data?.accessToken || res.data?.accessToken;
           const newRefreshToken = data?.refreshToken || res.data?.refreshToken;
 
-          if (newAccessToken) {
-            localStorage.setItem('access_token', newAccessToken);
-            if (newRefreshToken) {
-              localStorage.setItem('refresh_token', newRefreshToken);
-            }
+          if (!newAccessToken) throw new Error('No access token returned from refresh');
 
-            apiClient.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-
-            processQueue(null, newAccessToken);
-            isRefreshing = false;
-
-            return apiClient(originalRequest);
-          } else {
-            throw new Error('No access token returned from refresh');
-          }
+          localStorage.setItem('access_token', newAccessToken);
+          if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
+          apiClient.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          processQueue(null, newAccessToken);
+          isRefreshing = false;
+          return apiClient(originalRequest);
         } catch (refreshErr) {
           processQueue(refreshErr, null);
           isRefreshing = false;
-
           window.dispatchEvent(new Event('auth:logout'));
           localStorage.clear();
           if (window.location.pathname !== '/login' && window.location.pathname !== '/activate') {
@@ -145,13 +154,13 @@ apiClient.interceptors.response.use(
           }
           return Promise.reject(refreshErr);
         }
-      } else {
-        isRefreshing = false;
-        window.dispatchEvent(new Event('auth:logout'));
-        localStorage.clear();
-        if (window.location.pathname !== '/login' && window.location.pathname !== '/activate') {
-          window.location.href = '/login';
-        }
+      }
+
+      isRefreshing = false;
+      window.dispatchEvent(new Event('auth:logout'));
+      localStorage.clear();
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/activate') {
+        window.location.href = '/login';
       }
     }
 
