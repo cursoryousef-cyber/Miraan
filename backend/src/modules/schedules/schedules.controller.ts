@@ -6,6 +6,7 @@ import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { CurrentUser, RequireRoles } from '../../common/decorators';
 import { IAuthenticatedUser } from '../../common/interfaces';
 import { SchedulesService, CreateScheduleDto, UpdateScheduleDto } from './schedules.service';
+import { TraineeScheduleReaderService } from './trainee-schedule-reader.service';
 import { CAPABILITIES, CapabilityGuard, RequireCapability } from '../../common/authz';
 import { ProposedSession } from './conflict-engine.service';
 
@@ -14,7 +15,10 @@ import { ProposedSession } from './conflict-engine.service';
 @UseGuards(JwtAuthGuard, RolesGuard, CapabilityGuard)
 @ApiBearerAuth('JWT-auth')
 export class SchedulesController {
-  constructor(private schedulesService: SchedulesService) {}
+  constructor(
+    private schedulesService: SchedulesService,
+    private traineeScheduleReader: TraineeScheduleReaderService,
+  ) {}
 
   @Get()
   @RequireCapability(
@@ -30,6 +34,13 @@ export class SchedulesController {
     @Query('traineeId') traineeId?: string,
     @Query('departmentId') departmentId?: string,
   ) {
+    // Trainee scope is derived from the traineeProfile itself. The active
+    // organization selector may hold the parent cluster, while schedules belong
+    // to the actual hospital hosting the trainee. Never let that header hide or
+    // widen a trainee's own published schedule.
+    if (user.roles.includes('trainee')) {
+      return this.traineeScheduleReader.findAll(user, { traineeId, departmentId });
+    }
     return this.schedulesService.findAll(user, { status, traineeId, departmentId });
   }
 
@@ -37,6 +48,9 @@ export class SchedulesController {
   @RequireCapability(CAPABILITIES.SCHEDULE_VIEW, CAPABILITIES.SELF_VIEW)
   @ApiOperation({ summary: 'تفاصيل جدول تدريبي محدد مع جلساته وإصداراته' })
   async findOne(@Param('id') id: string, @CurrentUser() user: IAuthenticatedUser) {
+    if (user.roles.includes('trainee')) {
+      return this.traineeScheduleReader.findOne(id, user);
+    }
     return this.schedulesService.findOne(id, user);
   }
 
