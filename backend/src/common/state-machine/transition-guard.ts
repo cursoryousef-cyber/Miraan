@@ -18,7 +18,7 @@ export function assertValidTransition(
   if (!allowed.includes(next)) {
     const allowedList = allowed.length > 0 ? allowed.join('، ') : 'لا يوجد';
     throw new BadRequestException(
-      `لا يمكن نقل ${entityType} من الحالة "${current}" إلى "${next}". الحالات المسموحة: ${allowedList}`,
+      `لا يمكن نقل ${entityType} من الحالة \"${current}\" إلى \"${next}\". الحالات المسموحة: ${allowedList}`,
     );
   }
 }
@@ -55,12 +55,14 @@ export const TRAINING_REQUEST_TRANSITIONS: TransitionTable = {
   returned_to_university: ['resubmitted'],
   resubmitted: ['under_cluster_review'],
   rejected: [],
+  // Auto-allocation is an explicit operational action. Requests that have
+  // already reached `approved` must be allowed to enter this stage as well;
+  // otherwise the cluster supervisor's Smart Auto Allocation action fails with
+  // a transition error and approved requests remain stuck in "pending allocation".
   auto_allocated: ['manually_reallocated', 'approved', 'returned_to_university', 'rejected'],
-  // Legacy status present in existing rows (pre-state-machine). Treated as an
-  // alias of auto_allocated so historical requests are not stranded.
   allocated: ['manually_reallocated', 'approved', 'returned_to_university', 'rejected'],
   manually_reallocated: ['approved', 'auto_allocated'],
-  approved: ['hospital_administrator_accepted', 'hospital_accepted', 'hospital_returned_to_cluster', 'rejected'],
+  approved: ['hospital_administrator_accepted', 'hospital_accepted', 'hospital_returned_to_cluster', 'rejected', 'auto_allocated'],
   hospital_accepted: ['supervisor_accepted', 'hospital_returned_to_cluster', 'rejected'],
   hospital_administrator_accepted: ['training_supervisor_accepted', 'hospital_returned_to_cluster', 'rejected'],
   hospital_returned_to_cluster: ['auto_allocated', 'manually_reallocated'],
