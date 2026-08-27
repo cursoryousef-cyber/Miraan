@@ -137,10 +137,14 @@ export const TrainerCards: React.FC<{ onNavigate: (tab: string) => void }> = ({ 
   const assignTraineeMutation = useMutation({
     mutationFn: async ({ traineeId, trainerProfileId, departmentId, reason }: { traineeId: string; trainerProfileId: string; departmentId?: string; reason?: string }) => {
       const selected = assignableTrainees.find((t) => t.id === traineeId);
+      const effectiveDeptId = departmentId || assignModalTrainer?.departmentId || assignModalTrainer?.department?.id;
+      if (!effectiveDeptId) {
+        throw new Error('يجب اختيار القسم قبل إتمام الإسناد.');
+      }
       if (selected?.rowId) {
         const res = await apiClient.patch(`/training-requests/trainees/${selected.rowId}/hospital-review/assignment`, {
           trainerProfileId,
-          departmentId,
+          departmentId: effectiveDeptId,
           reason,
         });
         return res.data;
@@ -150,28 +154,29 @@ export const TrainerCards: React.FC<{ onNavigate: (tab: string) => void }> = ({ 
         traineeProfileId: selected?.profileId || traineeId,
         targetHospitalId: assignModalTrainer?.organizationId || undefined,
         trainerProfileId,
-        departmentId,
+        departmentId: effectiveDeptId,
         reason,
-      }).catch(async () => {
-        return { message: 'تم إسناد المتدرب بنجاح' };
       });
       return (res as any)?.data || res;
     },
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['trainer-cards'] });
       queryClient.invalidateQueries({ queryKey: ['trainer-cards-assignment'] });
       queryClient.invalidateQueries({ queryKey: ['hospital-review-trainees'] });
       queryClient.invalidateQueries({ queryKey: ['incoming-trainees'] });
       queryClient.invalidateQueries({ queryKey: ['incoming-trainees-for-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['hospital-capacity-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['acceptance-chain-trainees'] });
       queryClient.invalidateQueries({ queryKey: ['hospitals-cards'] });
       queryClient.invalidateQueries({ queryKey: ['assigned-interns'] });
-      setSuccessMsg(res?.message || 'تم إسناد المتدرب بنجاح وسيكون بانتظار قبول المدرب');
       setAssignModalTrainer(null);
       setSelectedTraineeRowId('');
+      setAssignReason('إسناد متدرب للمدرب المباشر');
       setAssignError(null);
+      setSuccessMsg(res?.message || 'تم إسناد المتدرب للمدرب والقسم بنجاح وسيكون بانتظار قبول المدرب');
     },
     onError: (err: any) => {
-      setAssignError(err?.response?.data?.message || err?.message || 'حدث خطأ أثناء إسناد المتدرب');
+      setAssignError(err.response?.data?.message || err.message || 'فشل إسناد المتدرب للمدرب');
     },
   });
 
@@ -753,13 +758,15 @@ export const TrainerCards: React.FC<{ onNavigate: (tab: string) => void }> = ({ 
           إسناد متدرب — {assignModalTrainer?.nameAr}
         </DialogTitle>
         <DialogContent sx={{ pt: 2.5 }}>
-          {assignError && <Alert severity="error" sx={{ mb: 2 }}>{assignError}</Alert>}
-
           {assignModalTrainer && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+              {assignError && (
+                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setAssignError(null)}>
+                  {assignError}
+                </Alert>
+              )}
               <Alert severity="info" sx={{ fontSize: 13 }}>
-                سيتم إسناد المتدرب إلى المدرب <strong>{assignModalTrainer.nameAr}</strong>
-                {assignModalTrainer.department?.nameAr ? ` في قسم «${assignModalTrainer.department.nameAr}»` : ''}.
+                سيتم إسناد المتدرب للقسم <strong>({assignModalTrainer.department?.nameAr || 'القسم التابع للمدرب'})</strong> وتحت إشراف المدرب <strong>{assignModalTrainer.person?.nameAr || assignModalTrainer.nameAr}</strong>.
                 السعة المتاحة: {assignModalTrainer.available} من {assignModalTrainer.maxTrainees} مقعد.
               </Alert>
 

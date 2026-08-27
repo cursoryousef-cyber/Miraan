@@ -833,6 +833,22 @@ export const Affiliations: React.FC = () => {
     },
   });
 
+  const resubmitMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.patch(`/training-requests/${id}`, { status: 'resubmitted' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['training-request-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['training-request-trainees'] });
+      closeDetailsModal();
+      setSuccessMsg('تمت إعادة إرسال طلب التدريب إلى التجمع الصحي بنجاح للمراجعة والاعتماد.');
+      setErrorMsg(null);
+    },
+    onError: (err: any) => {
+      setErrorMsg(err.response?.data?.message || err.message || 'فشل إعادة إرسال الطلب');
+    },
+  });
+
   // View Details fetches the request record plus its trainee rows on open —
   // both real GET endpoints (training_request.view), nothing hardcoded.
   const { data: detailData, isLoading: detailLoading } = useQuery({
@@ -1471,7 +1487,9 @@ export const Affiliations: React.FC = () => {
             <InputLabel>نوع طلب التدريب</InputLabel>
             <Select value={reqType} label="نوع طلب التدريب" onChange={(e) => setReqType(e.target.value as any)}>
               <MenuItem value="university_request">🏛️ طلب تدريب صادر من جامعة / كلية موفدة</MenuItem>
-              <MenuItem value="cluster_request">🏥 طلب تدريب مباشر صادر من التجمع الصحي</MenuItem>
+              {isClusterUser && (
+                <MenuItem value="cluster_request">🏥 طلب تدريب مباشر صادر من التجمع الصحي</MenuItem>
+              )}
             </Select>
           </FormControl>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -1902,7 +1920,7 @@ export const Affiliations: React.FC = () => {
                                   {blockingErrors.length > 0 && !alreadyAllocated && (
                                     <div style={{ fontSize: '11px', color: '#B91C1C', marginTop: '4px', maxWidth: '320px', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                                       ملاحظات التحقق (قد تكون مُعالجة بعد آخر فحص): {blockingErrors.map((e: any) => e.messageAr).join('، ')}
-                                      {blockingErrors.some((e: any) => ['mobile', 'email', 'gender'].includes(e.field)) && canAllocateRows && (
+                                      {(blockingErrors.some((e: any) => ['mobile', 'email', 'gender', 'nameAr', 'nationalId', 'academicNumber'].includes(e.field)) || detailsReq?.status === 'returned_to_university' || isUniversitySponsor) && (
                                         <Button
                                           size="small"
                                           variant="outlined"
@@ -1918,7 +1936,7 @@ export const Affiliations: React.FC = () => {
                                           }}
                                           style={{ marginTop: '4px', fontSize: '11px', borderColor: '#B45309', color: '#B45309' }}
                                         >
-                                          تكملة البيانات الناقصة
+                                          تعديل / استكمال بيانات المتدرب
                                         </Button>
                                       )}
                                     </div>
@@ -2068,6 +2086,18 @@ export const Affiliations: React.FC = () => {
           ) : <Alert severity="error">تعذر تحميل تفاصيل الطلب</Alert>}
         </DialogContent>
         <DialogActions style={{ padding: '16px 24px', borderTop: '1px solid #E2E8F0', gap: '8px', flexWrap: 'wrap' }}>
+          {detailsReq && detailsReq.status === 'returned_to_university' && (isUniversitySponsor || hasCapability('training_request.create')) && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<Send size={14} />}
+              onClick={() => resubmitMutation.mutate(detailsReq.id)}
+              disabled={resubmitMutation.isPending}
+              style={{ background: 'linear-gradient(135deg, #059669 0%, #0D9488 100%)', fontWeight: 700 }}
+            >
+              {resubmitMutation.isPending ? <CircularProgress size={16} color="inherit" /> : 'إعادة إرسال للتجمع الصحي بعد التصحيح'}
+            </Button>
+          )}
           {detailsReq && canAssign && ASSIGNABLE.includes(detailsReq.status) && (
             <Button variant="contained" size="small" onClick={() => { closeDetailsModal(); openAllocationDialog(detailsReq); }} style={{ background: '#0891B2', fontWeight: 700 }}>مراجعة وتوزيع المقاعد</Button>
           )}

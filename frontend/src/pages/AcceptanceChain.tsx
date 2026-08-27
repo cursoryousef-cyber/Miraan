@@ -405,8 +405,8 @@ export const AcceptanceChain: React.FC = () => {
                   { label: `التخصص: ${specialtyName}`, tone: 'success' },
                 ]}
                 metrics={[
-                  { label: 'القسم السريري', value: row.assignedDepartment?.nameAr ?? 'لم يحدد بعد', tone: row.assignedDepartment ? 'info' : 'neutral' },
-                  { label: 'المدرب السريري', value: row.assignedTrainer?.person?.nameAr ?? 'لم يحدد بعد', tone: row.assignedTrainer ? 'success' : 'neutral' },
+                  { label: 'القسم السريري', value: row.assignedDepartment?.nameAr ?? 'غير مسند', tone: row.assignedDepartment ? 'info' : 'neutral' },
+                  { label: 'المدرب السريري', value: row.assignedTrainer?.person?.nameAr ?? 'غير مسند', tone: row.assignedTrainer ? 'success' : 'neutral' },
                 ]}
                 footnote={`رقم الطلب: ${req?.requestNumber ?? '—'} · تاريخ الطلب: ${requestDateText} · الفترة: ${periodText}`}
                 actions={[{ label: canAct ? 'عرض التفاصيل والإجراءات' : 'عرض تفاصيل ومسار القبول', icon: Eye, tone: 'info', onClick: () => setSelectedRow(row) }]}
@@ -458,8 +458,8 @@ export const AcceptanceChain: React.FC = () => {
                     </TableCell>
                     <TableCell>{sourceOrgName}</TableCell>
                     <TableCell>{specialtyName}</TableCell>
-                    <TableCell>{row.assignedDepartment?.nameAr || '—'}</TableCell>
-                    <TableCell>{row.assignedTrainer?.person?.nameAr || '—'}</TableCell>
+                    <TableCell>{row.assignedDepartment?.nameAr || 'غير مسند'}</TableCell>
+                    <TableCell>{row.assignedTrainer?.person?.nameAr || 'غير مسند'}</TableCell>
                     <TableCell>
                       <Chip size="small" label={st.label} color={st.color} sx={{ fontWeight: 700 }} />
                     </TableCell>
@@ -511,8 +511,8 @@ export const AcceptanceChain: React.FC = () => {
                 <div><strong>الجهة المرسلة:</strong> {selectedRow.trainingRequest?.sourceOrg?.nameAr || 'التجمع الصحي'}</div>
                 <div><strong>رقم الطلب:</strong> {selectedRow.trainingRequest?.requestNumber || '—'}</div>
                 <div><strong>تاريخ الطلب:</strong> {selectedRow.trainingRequest?.createdAt ? String(selectedRow.trainingRequest.createdAt).slice(0, 10) : '—'}</div>
-                <div><strong>القسم السريري المسند:</strong> {selectedRow.assignedDepartment?.nameAr || 'لم يحدد بعد'}</div>
-                <div><strong>المدرب السريري المسند:</strong> {selectedRow.assignedTrainer?.person?.nameAr || 'لم يحدد بعد'}</div>
+                <div><strong>القسم السريري المسند:</strong> {selectedRow.assignedDepartment?.nameAr || 'غير مسند'}</div>
+                <div><strong>المدرب السريري المسند:</strong> {selectedRow.assignedTrainer?.person?.nameAr || 'غير مسند'}</div>
                 <div style={{ gridColumn: 'span 2' }}>
                   <strong>فترة التدريب:</strong>{' '}
                   {(selectedRow.startDate || selectedRow.trainingRequest?.trainingStartDate)
@@ -604,11 +604,13 @@ export const AcceptanceChain: React.FC = () => {
             <InputLabel>المدرب السريري</InputLabel>
             <Select value={newTrainerId} onChange={(e) => setNewTrainerId(e.target.value as string)} label="المدرب السريري">
               <MenuItem value=""><em>لا تغيير</em></MenuItem>
-              {trainers.map((t: any) => (
-                <MenuItem key={t.id} value={t.id}>
-                  {t.person?.nameAr || t.nameAr}{t.currentCount !== undefined ? ` (${t.currentCount}/${t.maxTrainees})` : ''}
-                </MenuItem>
-              ))}
+              {trainers
+                .filter((t: any) => !newDeptId || t.departmentId === newDeptId || t.department?.id === newDeptId)
+                .map((t: any) => (
+                  <MenuItem key={t.id} value={t.id}>
+                    {t.person?.nameAr || t.nameAr}{t.currentCount !== undefined ? ` (${t.currentCount}/${t.maxTrainees})` : ''}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
           <TextField fullWidth label="ملاحظات (اختياري)" multiline rows={2} value={actionNotes}

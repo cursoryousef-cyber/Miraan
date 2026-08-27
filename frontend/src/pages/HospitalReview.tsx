@@ -9,7 +9,7 @@ import {
 import {
   Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Chip, Dialog, DialogTitle, DialogContent, DialogActions, Alert, CircularProgress,
-  TextField, MenuItem, Select, FormControl, InputLabel, Tooltip,
+  TextField, MenuItem, Select, FormControl, InputLabel, Tooltip, Box,
 } from '@mui/material';
 
 const STATUS_LABELS: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'info' | 'default' }> = {
@@ -24,8 +24,16 @@ const STATUS_LABELS: Record<string, { label: string; color: 'success' | 'warning
 };
 
 const DOCUMENT_TYPES = [
-  'national_id', 'internship_letter', 'academic_transcript', 'medical_examination',
-  'vaccination_record', 'cpr_certificate', 'bls', 'acls', 'license', 'additional',
+  { code: 'national_id', labelAr: 'الهوية الوطنية' },
+  { code: 'internship_letter', labelAr: 'خطاب الامتياز' },
+  { code: 'academic_transcript', labelAr: 'السجل الأكاديمي' },
+  { code: 'medical_examination', labelAr: 'الفحص الطبي' },
+  { code: 'vaccination_record', labelAr: 'سجل التطعيمات' },
+  { code: 'cpr_certificate', labelAr: 'شهادة الإنقاذ (CPR)' },
+  { code: 'bls', labelAr: 'دورة دعم الحياة الأساسي (BLS)' },
+  { code: 'acls', labelAr: 'دورة دعم الحياة المتقدم (ACLS)' },
+  { code: 'license', labelAr: 'الترخيص المهني / تصنيف الهيئة' },
+  { code: 'additional', labelAr: 'مستندات إضافية' },
 ];
 
 export const HospitalReview: React.FC = () => {
@@ -599,16 +607,23 @@ export const HospitalReview: React.FC = () => {
             <Select
               multiple
               value={selectedDocs}
-              onChange={(e) => setSelectedDocs(e.target.value as string[])}
+              onChange={(e) => setSelectedDocs(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
               label="أنواع المستندات المطلوبة"
-              renderValue={(selected) => (selected as string[]).join('، ')}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(selected as string[]).map((val) => {
+                    const doc = DOCUMENT_TYPES.find((d) => d.code === val);
+                    return <Chip key={val} label={doc?.labelAr || val} size="small" />;
+                  })}
+                </Box>
+              )}
             >
               {DOCUMENT_TYPES.map((t) => (
-                <MenuItem key={t} value={t}>{t}</MenuItem>
+                <MenuItem key={t.code} value={t.code}>{t.labelAr} ({t.code})</MenuItem>
               ))}
             </Select>
           </FormControl>
-          <TextField label="ملاحظات" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth multiline rows={2} size="small" />
+          <TextField label="ملاحظات وتفاصيل إضافية للمستندات" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth multiline rows={2} size="small" />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialog(null)}>إلغاء</Button>
@@ -669,23 +684,25 @@ export const HospitalReview: React.FC = () => {
             <InputLabel>المدرب السريري</InputLabel>
             <Select value={newTrainerId} onChange={(e) => setNewTrainerId(e.target.value)} label="المدرب السريري">
               <MenuItem value="">— اختر المدرب —</MenuItem>
-              {trainers.map((t: any) => {
-                const isUnqualified = !t.isActive;
-                const isOnLeave = Boolean(t.onLeave);
-                const isFull = (t.available ?? 0) <= 0;
-                const isDisabled = isUnqualified || isOnLeave || isFull;
+              {trainers
+                .filter((t: any) => !newDeptId || t.departmentId === newDeptId || t.department?.id === newDeptId)
+                .map((t: any) => {
+                  const isUnqualified = !t.isActive;
+                  const isOnLeave = Boolean(t.onLeave);
+                  const isFull = (t.available ?? 0) <= 0;
+                  const isDisabled = isUnqualified || isOnLeave || isFull;
 
-                let hint = `(المتاح: ${t.available ?? 0} من ${t.maxTrainees ?? 5})`;
-                if (isUnqualified) hint = '(غير مؤهل للتدريب)';
-                else if (isOnLeave) hint = '(في إجازة حالياً)';
-                else if (isFull) hint = '(وصل لأقصى سعة)';
+                  let hint = `(المتاح: ${t.available ?? 0} من ${t.maxTrainees ?? 5})`;
+                  if (isUnqualified) hint = '(غير مؤهل للتدريب)';
+                  else if (isOnLeave) hint = '(في إجازة حالياً)';
+                  else if (isFull) hint = '(وصل لأقصى سعة)';
 
-                return (
-                  <MenuItem key={t.id} value={t.id} disabled={isDisabled}>
-                    {t.nameAr} {t.department?.nameAr ? `(${t.department.nameAr})` : ''} — {hint}
-                  </MenuItem>
-                );
-              })}
+                  return (
+                    <MenuItem key={t.id} value={t.id} disabled={isDisabled}>
+                      {t.nameAr} {t.department?.nameAr ? `(${t.department.nameAr})` : ''} — {hint}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
           <TextField type="date" label="تاريخ بداية الفترة التدريبية" value={newStartDate} onChange={(e) => setNewStartDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />

@@ -47,6 +47,8 @@ export const AcademicIntakes: React.FC = () => {
   // assertRequestDirection then requires the target to be a hospital (or
   // cluster). A university/entity user must target a cluster instead.
   const isClusterUser = user?.roles?.some((r: string) => ['cluster_manager', 'cluster_administrator', 'training_director', 'platform_owner', 'system_admin'].includes(r));
+  const isUniversityUser = hasAnyRole(['university_administrator', 'academic_affairs', 'university_coordinator', 'university_supervisor']);
+  const canPerformHospitalAllocation = !isUniversityUser && (isClusterUser || hasAnyRole(['hospital_training_admin', 'hospital_administrator', 'org_manager']));
   const queryClient = useQueryClient();
 
   const [openModal, setOpenModal] = useState(false);
@@ -61,7 +63,7 @@ export const AcademicIntakes: React.FC = () => {
   // for a university/entity user it is the receiving cluster. programId is
   // optional at creation but mandatory later for `academic-intakes/from-request`.
   const [reqFormData, setReqFormData] = useState({
-    requestType: 'internal_request',
+    requestType: isClusterUser ? 'internal_request' : 'university_request',
     specialty: 'طب باطني',
     studentCount: 10,
     trainingStartDate: new Date().toISOString().split('T')[0],
@@ -323,15 +325,17 @@ export const AcademicIntakes: React.FC = () => {
                         >
                           التفاصيل
                         </Button>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          startIcon={<Sparkles size={14} />}
-                          onClick={() => navigate(`/hospital?tab=allocations&batchId=${intake.id}`)}
-                          sx={{ fontSize: 12, py: 0.25, px: 1, fontWeight: 700, backgroundColor: '#0F766E' }}
-                        >
-                          التوزيع الذكي
-                        </Button>
+                        {canPerformHospitalAllocation && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<Sparkles size={14} />}
+                            onClick={() => navigate(`/hospital?tab=allocations&batchId=${intake.id}`)}
+                            sx={{ fontSize: 12, py: 0.25, px: 1, fontWeight: 700, backgroundColor: '#0F766E' }}
+                          >
+                            التوزيع الذكي
+                          </Button>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -415,7 +419,9 @@ export const AcademicIntakes: React.FC = () => {
                   label="مصدر / نوع الطلب"
                   onChange={(e) => setReqFormData({ ...reqFormData, requestType: e.target.value })}
                 >
-                  <MenuItem value="internal_request">داخلي (مباشر من التجمع الصحي)</MenuItem>
+                  {isClusterUser && (
+                    <MenuItem value="internal_request">داخلي (مباشر من التجمع الصحي)</MenuItem>
+                  )}
                   <MenuItem value="university_request">جامعي (موفد من جامعة)</MenuItem>
                   <MenuItem value="entity_request">جهة تدريبية خارجية</MenuItem>
                   <MenuItem value="extension_request">تمديد / إعادة تدريب</MenuItem>
@@ -442,7 +448,7 @@ export const AcademicIntakes: React.FC = () => {
                 size="small"
                 required
                 value={reqFormData.studentCount}
-                onChange={(e) => setReqFormData({ ...reqFormData, studentCount: Number(e.target.value) })}
+                onChange={(e) => setReqFormData({ ...reqFormData, studentCount: parseInt(e.target.value) || 1 })}
               />
             </Grid>
 
@@ -602,17 +608,19 @@ export const AcademicIntakes: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setSelectedIntakeDetail(null)}>إغلاق</Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              const id = selectedIntakeDetail?.id;
-              setSelectedIntakeDetail(null);
-              navigate(`/hospital?tab=allocations&batchId=${id}`);
-            }}
-            sx={{ bgcolor: '#0F766E', fontWeight: 700 }}
-          >
-            الانتقال للتوزيع الذكي
-          </Button>
+          {canPerformHospitalAllocation && (
+            <Button
+              variant="contained"
+              onClick={() => {
+                const id = selectedIntakeDetail?.id;
+                setSelectedIntakeDetail(null);
+                navigate(`/hospital?tab=allocations&batchId=${id}`);
+              }}
+              sx={{ bgcolor: '#0F766E', fontWeight: 700 }}
+            >
+              الانتقال للتوزيع الذكي
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </DataPageShell>

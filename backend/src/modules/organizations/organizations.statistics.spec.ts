@@ -17,7 +17,7 @@ import { OrganizationsService } from './organizations.service';
 describe('OrganizationsController.getStatistics scope', () => {
   it('has no client-supplied parameter — only @Scope() reaches the service', async () => {
     const service = { getStatistics: jest.fn().mockResolvedValue({ data: {} }) } as any;
-    const controller = new OrganizationsController(service, {} as any);
+    const controller = new OrganizationsController(service, {} as any, {} as any);
 
     const scope = { visibleOrgIds: ['hospital-A'] } as any;
     await controller.getStatistics(scope);
@@ -31,7 +31,7 @@ describe('OrganizationsController.getStatistics scope', () => {
 
   it('a platform session (visibleOrgIds: null) still gets the unrestricted view', async () => {
     const service = { getStatistics: jest.fn().mockResolvedValue({ data: {} }) } as any;
-    const controller = new OrganizationsController(service, {} as any);
+    const controller = new OrganizationsController(service, {} as any, {} as any);
 
     await controller.getStatistics({ visibleOrgIds: null } as any);
 
