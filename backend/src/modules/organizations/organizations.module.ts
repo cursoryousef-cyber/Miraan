@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
+import { OrganizationDirectoryService } from './organization-directory.service';
 import { OrganizationHierarchyService } from './organization-hierarchy.service';
 import { OrganizationProvisioningService } from './organization-provisioning.service';
 import { OrganizationAffiliationsService } from './organization-affiliations.service';
@@ -15,6 +16,7 @@ import { OrganizationAssignmentModule } from '../organization-assignments/organi
   controllers: [OrganizationsController, OrganizationAffiliationsController, HospitalCapacityController],
   providers: [
     OrganizationsService,
+    OrganizationDirectoryService,
     OrganizationHierarchyService,
     OrganizationProvisioningService,
     OrganizationAffiliationsService,
@@ -23,6 +25,7 @@ import { OrganizationAssignmentModule } from '../organization-assignments/organi
   ],
   exports: [
     OrganizationsService,
+    OrganizationDirectoryService,
     OrganizationHierarchyService,
     OrganizationProvisioningService,
     OrganizationAffiliationsService,

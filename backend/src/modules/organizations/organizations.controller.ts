@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrganizationsService } from './organizations.service';
+import { OrganizationDirectoryService } from './organization-directory.service';
 import { OrganizationProvisioningService } from './organization-provisioning.service';
 import { CreateOrganizationDto, UpdateOrganizationDto, ProvisionOrgWizardDto } from './dto/organization.dto';
 import { CurrentUser, RequirePermissions } from '../../common/decorators';
@@ -28,6 +29,7 @@ import {
 export class OrganizationsController {
   constructor(
     private organizationsService: OrganizationsService,
+    private directoryService: OrganizationDirectoryService,
     private provisioningService: OrganizationProvisioningService,
   ) {}
 
@@ -36,31 +38,30 @@ export class OrganizationsController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, type: String })
   @ApiQuery({ name: 'typeId', required: false, type: String })
   @ApiQuery({ name: 'parentId', required: false, type: String })
-  // Reading the directory is gated on ORG_VIEW, like hospitals-cards,
-  // statistics and hospitals below it. The legacy 'view_organizations'
-  // permission was never granted to org_manager or academic_supervisor in the
-  // RBAC rows even though both hold ORG_VIEW, so once PermissionsGuard was
-  // actually registered this route started refusing roles the capability model
-  // says may read it. Authoring stays on manage_organizations. Neither trainer
-  // nor trainee holds ORG_VIEW, so both remain refused.
   @RequireCapability(CAPABILITIES.ORG_VIEW)
   async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 20,
     @Query('search') search?: string,
+    @Query('status') status?: string,
     @Query('typeId') typeId?: string,
     @Query('parentId') parentId?: string,
     @Scope() scope?: ScopeContext,
   ) {
-    return this.organizationsService.findAll(+page, +limit, search, typeId, parentId, scope?.visibleOrgIds ?? null);
+    return this.directoryService.findAll(
+      +page,
+      +limit,
+      search,
+      typeId,
+      parentId,
+      status,
+      scope?.visibleOrgIds ?? null,
+    );
   }
 
-  // The clusters a sponsor may address a training request to. Held apart from
-  // the general listing so a university gains no visibility it did not already
-  // have: identity fields of active clusters only, for whoever may create a
-  // training request.
   @Get('request-targets')
   @RequireCapability(CAPABILITIES.TRAINING_REQUEST_CREATE)
   @ApiOperation({ summary: 'التجمعات الصحية المتاحة كجهة مستهدفة لطلب تدريب' })
@@ -68,8 +69,6 @@ export class OrganizationsController {
     return this.organizationsService.findRequestTargetClusters();
   }
 
-  // Reference data — the catalogue of organisation types, not any organisation's
-  // data. Any authenticated session may read it.
   @Get('types')
   @ApiOperation({ summary: 'قائمة أنواع الجهات (مستشفى، جامعة، تجمع صحي...)' })
   async getTypes() {
@@ -84,15 +83,6 @@ export class OrganizationsController {
     @CurrentUser() user?: IAuthenticatedUser,
     @Scope() scope?: ScopeContext,
   ) {
-    // Platform sessions (visibleOrgIds === null) are national by default — an
-    // explicit ?clusterId is an optional, soft display filter, but this must
-    // never fall back to the caller's own home organisation for a
-    // platform-level role. That fallback previously fired unconditionally,
-    // so a platform_owner/system_admin whose home org happens to be a
-    // cluster saw hospital cards (capacity/occupied — merged into the
-    // /organizations list) scoped to that one cluster, while /statistics
-    // (which has no such fallback) stayed correctly national. Non-platform
-    // roles keep the original behaviour: default to their own organisation.
     const isPlatformScope = !scope || scope.visibleOrgIds === null;
     const targetClusterId = clusterId || (isPlatformScope ? undefined : user?.organizationId);
     return this.organizationsService.getHospitalCardsMetrics(targetClusterId);
@@ -101,10 +91,6 @@ export class OrganizationsController {
   @Get('statistics')
   @RequireCapability(CAPABILITIES.ORG_VIEW, CAPABILITIES.REPORT_VIEW)
   @ApiOperation({ summary: 'مؤشرات الجهات الموحّدة — مصدر واحد للوحات وصفحة الجهات' })
-  // Scope comes from the caller's own session, never from the client — the
-  // organizationId query param this used to accept let any authenticated role
-  // read platform-wide totals just by omitting it. Same visibleOrgIds source
-  // getTree right below uses.
   async getStatistics(@Scope() scope: ScopeContext) {
     return this.organizationsService.getStatistics(scope.visibleOrgIds);
   }
