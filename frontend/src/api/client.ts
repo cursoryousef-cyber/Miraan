@@ -22,6 +22,26 @@ apiClient.interceptors.request.use(
       config.headers['X-Organization-Id'] = orgId;
     }
 
+    // Hospital trainer assignment accepts an optional departmentId, but the
+    // backend DTO correctly requires it to be a UUID. Some trainer-card data
+    // sources expose a legacy numeric department code instead of the UUID.
+    // Never send that invalid value: the trainer already determines the
+    // placement target and the department is optional on the canonical endpoint.
+    // This keeps the assignment action usable while preserving backend validation.
+    if (
+      config.url?.includes('/training-requests/trainees/') &&
+      config.url?.includes('/hospital-review/assignment') &&
+      config.data &&
+      typeof config.data === 'object' &&
+      'departmentId' in config.data
+    ) {
+      const departmentId = config.data.departmentId;
+      const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (departmentId && !uuidV4.test(String(departmentId))) {
+        delete config.data.departmentId;
+      }
+    }
+
     if (import.meta.env.DEV) {
       console.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
         hasToken: Boolean(token),
